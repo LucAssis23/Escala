@@ -1,0 +1,44 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main, claude/church-schedule-app-7kowt9]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          BASE_PATH: /Escala/
+          # Chave "publishable" do Supabase: é pública por design (vai no bundle
+          # do navegador de qualquer forma); a proteção dos dados é feita por RLS.
+          VITE_SUPABASE_URL: https://sulnfvrucuapekdjthxe.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_UTi1Y6d6JjqsS3tRa27ZDg_nGeCDGIo
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
