@@ -96,5 +96,20 @@ export function criarSupabaseRepo(url, anonKey) {
         atribuicoes.map(({ id, pessoa_id }) => q(sb.from('escala_itens').update({ pessoa_id }).eq('id', id)))
       )
     },
+
+    // Migra para a nuvem um banco inteiro vindo do modo localStorage
+    // (os ids locais já são UUIDs, então são preservados).
+    async importarDb(db) {
+      const inserir = async (tabela, linhas) => {
+        if (linhas && linhas.length) await q(sb.from(tabela).insert(linhas))
+      }
+      await inserir('pessoas', db.pessoas)
+      await inserir('departamentos', db.departamentos)
+      await inserir('funcoes', db.funcoes)
+      await inserir('membro_funcoes', db.membro_funcoes)
+      await inserir('indisponibilidades', db.indisponibilidades)
+      await inserir('escalas', db.escalas)
+      await inserir('escala_itens', db.escala_itens)
+    },
   }
 }

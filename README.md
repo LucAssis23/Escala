@@ -40,7 +40,15 @@ VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon
 ```
 
-5. Reinicie o `npm run dev`. O selo no topo muda para "Supabase" e todos os dados passam a ser salvos lá.
+5. Reinicie o `npm run dev`. O selo no topo muda para "🌐 Sincronizado" e todos os dados passam a ser salvos na nuvem.
+
+### Modo híbrido (nuvem + aparelho, os dois juntos)
+
+Com o Supabase configurado, o app funciona em modo híbrido:
+
+- **Sincronização via web**: todos os aparelhos que abrirem o site veem os mesmos dados, na hora.
+- **Cache local automático**: cada leitura bem-sucedida fica guardada no aparelho; se a internet cair, o app abre normalmente com a última versão sincronizada (selo "📴 Offline") — só as alterações exigem conexão.
+- **Migração com um clique**: se você já usou o modo local e a nuvem estiver vazia, o app oferece um botão "Importar dados deste aparelho" para enviar tudo ao Supabase sem digitar nada de novo.
 
 > As políticas de RLS do `schema.sql` são permissivas (qualquer pessoa com o link acessa tudo), o que é adequado para um app interno de igreja sem login. O próprio arquivo indica como restringir quando você quiser adicionar autenticação.
 

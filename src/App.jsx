@@ -15,8 +15,9 @@ const ABAS = [
 ]
 
 export default function App() {
-  const { carregando, erro, backend, limparErro } = useData()
+  const { carregando, erro, offline, backend, acoes, temDadosLocaisParaImportar, limparErro } = useData()
   const [aba, setAba] = useState('escalas')
+  const [importando, setImportando] = useState(false)
   // escala aberta na tela de detalhe (compartilhada entre Escalas e Agenda)
   const [escalaAbertaId, setEscalaAbertaId] = useState(null)
 
@@ -35,10 +36,39 @@ export default function App() {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-extrabold text-indigo-700">⛪ Escala da Igreja</h1>
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            {backend === 'supabase' ? 'Supabase' : 'Local'}
+            {backend === 'supabase' ? (offline ? '📴 Offline' : '🌐 Sincronizado') : '📱 Só neste aparelho'}
           </span>
         </div>
       </header>
+
+      {offline && (
+        <div className="m-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          📴 Sem conexão — exibindo a última versão sincronizada. Alterações precisam de internet.
+        </div>
+      )}
+
+      {temDadosLocaisParaImportar && (
+        <div className="m-4 space-y-2 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800">
+          <p>
+            ☁️ A nuvem está vazia, mas há dados salvos <b>neste aparelho</b> (do modo local). Quer enviá-los para a
+            nuvem e sincronizar com todo mundo?
+          </p>
+          <button
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-indigo-300"
+            disabled={importando}
+            onClick={async () => {
+              setImportando(true)
+              try {
+                await acoes.importarDadosLocais()
+              } finally {
+                setImportando(false)
+              }
+            }}
+          >
+            {importando ? 'Importando…' : 'Importar dados deste aparelho'}
+          </button>
+        </div>
+      )}
 
       {erro && (
         <div className="m-4 flex items-start justify-between gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
