@@ -11,8 +11,17 @@ export function criarSupabaseRepo(url, anonKey) {
     return data
   }
 
+  // Chave mestre (papel "super"): quando ela opera numa igreja que não é a
+  // dela, as gravações precisam informar explicitamente a igreja_id (o
+  // padrão da coluna é a igreja do próprio usuário logado).
+  let igrejaForcada = null
+
   return {
     nome: 'supabase',
+
+    setIgrejaAtiva(id) {
+      igrejaForcada = id || null
+    },
 
     async loadAll() {
       // Perfil do usuário logado (papel, igreja, aprovação) rege o que carregar.
@@ -29,12 +38,14 @@ export function criarSupabaseRepo(url, anonKey) {
       const vazio = {
         pessoas: [], departamentos: [], funcoes: [], membro_funcoes: [],
         indisponibilidades: [], indisponibilidades_semanais: [], escalas: [], escala_itens: [],
-        perfis: [], lider_departamentos: [], perfil,
+        perfis: [], lider_departamentos: [], igrejas: [], perfil,
       }
       // Sem perfil ou aguardando aprovação: o RLS bloqueia tudo mesmo — nem tenta.
       if (!perfil || !perfil.aprovado) return vazio
 
-      const [pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens, perfis, lider_departamentos] =
+      // A chave mestre (papel "super") enxerga os dados de TODAS as igrejas
+      // aqui — quem restringe à igreja escolhida na tela é o DataContext.
+      const [pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens, perfis, lider_departamentos, igrejas] =
         await Promise.all([
           q(sb.from('pessoas').select('*').order('nome')),
           q(sb.from('departamentos').select('*').order('nome')),
@@ -46,8 +57,9 @@ export function criarSupabaseRepo(url, anonKey) {
           q(sb.from('escala_itens').select('*')),
           q(sb.from('perfis').select('*').order('nome')),
           q(sb.from('lider_departamentos').select('*')),
+          q(sb.from('igrejas').select('*').order('nome')),
         ])
-      return { pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens, perfis, lider_departamentos, perfil }
+      return { pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens, perfis, lider_departamentos, igrejas, perfil }
     },
 
     // ---- equipe (só admin; o RLS garante) ----
@@ -114,7 +126,10 @@ export function criarSupabaseRepo(url, anonKey) {
     },
 
     async createPessoa({ nome, telefone, ativo = true }) {
-      return (await q(sb.from('pessoas').insert({ nome, telefone: telefone || '', ativo }).select()))[0]
+      return (await q(sb.from('pessoas').insert({
+        nome, telefone: telefone || '', ativo,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }).select()))[0]
     },
     async updatePessoa(id, patch) {
       await q(sb.from('pessoas').update(patch).eq('id', id))
@@ -124,7 +139,10 @@ export function criarSupabaseRepo(url, anonKey) {
     },
 
     async createDepartamento({ nome, cor }) {
-      return (await q(sb.from('departamentos').insert({ nome, cor }).select()))[0]
+      return (await q(sb.from('departamentos').insert({
+        nome, cor,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }).select()))[0]
     },
     async updateDepartamento(id, patch) {
       await q(sb.from('departamentos').update(patch).eq('id', id))
@@ -134,7 +152,10 @@ export function criarSupabaseRepo(url, anonKey) {
     },
 
     async createFuncao({ departamento_id, nome }) {
-      return (await q(sb.from('funcoes').insert({ departamento_id, nome }).select()))[0]
+      return (await q(sb.from('funcoes').insert({
+        departamento_id, nome,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }).select()))[0]
     },
     async updateFuncao(id, patch) {
       await q(sb.from('funcoes').update(patch).eq('id', id))
@@ -144,28 +165,40 @@ export function criarSupabaseRepo(url, anonKey) {
     },
 
     async addMembroFuncao(pessoa_id, funcao_id) {
-      await q(sb.from('membro_funcoes').upsert({ pessoa_id, funcao_id }))
+      await q(sb.from('membro_funcoes').upsert({
+        pessoa_id, funcao_id,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }))
     },
     async removeMembroFuncao(pessoa_id, funcao_id) {
       await q(sb.from('membro_funcoes').delete().eq('pessoa_id', pessoa_id).eq('funcao_id', funcao_id))
     },
 
     async addIndisponibilidade(pessoa_id, data) {
-      await q(sb.from('indisponibilidades').upsert({ pessoa_id, data }))
+      await q(sb.from('indisponibilidades').upsert({
+        pessoa_id, data,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }))
     },
     async removeIndisponibilidade(pessoa_id, data) {
       await q(sb.from('indisponibilidades').delete().eq('pessoa_id', pessoa_id).eq('data', data))
     },
 
     async addIndisponibilidadeSemanal(pessoa_id, dia_semana) {
-      await q(sb.from('indisponibilidades_semanais').upsert({ pessoa_id, dia_semana }))
+      await q(sb.from('indisponibilidades_semanais').upsert({
+        pessoa_id, dia_semana,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }))
     },
     async removeIndisponibilidadeSemanal(pessoa_id, dia_semana) {
       await q(sb.from('indisponibilidades_semanais').delete().eq('pessoa_id', pessoa_id).eq('dia_semana', dia_semana))
     },
 
     async createEscala({ data, titulo }) {
-      return (await q(sb.from('escalas').insert({ data, titulo }).select()))[0]
+      return (await q(sb.from('escalas').insert({
+        data, titulo,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }).select()))[0]
     },
     async updateEscala(id, patch) {
       await q(sb.from('escalas').update(patch).eq('id', id))
@@ -175,7 +208,10 @@ export function criarSupabaseRepo(url, anonKey) {
     },
 
     async addEscalaItem(escala_id, funcao_id) {
-      return (await q(sb.from('escala_itens').insert({ escala_id, funcao_id, pessoa_id: null }).select()))[0]
+      return (await q(sb.from('escala_itens').insert({
+        escala_id, funcao_id, pessoa_id: null,
+        ...(igrejaForcada ? { igreja_id: igrejaForcada } : {}),
+      }).select()))[0]
     },
     async removeEscalaItem(id) {
       await q(sb.from('escala_itens').delete().eq('id', id))

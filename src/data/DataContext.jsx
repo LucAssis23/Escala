@@ -14,8 +14,11 @@ const VAZIO = {
   escala_itens: [],
   perfis: [],
   lider_departamentos: [],
+  igrejas: [],
   perfil: null,
 }
+
+const CHAVE_IGREJA_ATIVA = 'escala-igreja-ativa-super'
 
 export function DataProvider({ children }) {
   const [db, setDb] = useState(VAZIO)
@@ -60,6 +63,60 @@ export function DataProvider({ children }) {
   useEffect(() => {
     if (authPronto && (!requerLogin || usuario)) recarregar()
   }, [authPronto, usuario, requerLogin, recarregar])
+
+  // Chave mestre (papel "super"): admin de todas as igrejas. Ela escolhe
+  // qual igreja quer operar; a escolha fica salva para a próxima visita.
+  const ehSuper = db.perfil?.papel === 'super'
+  const [igrejaAtivaId, setIgrejaAtivaIdState] = useState(() => {
+    try {
+      return localStorage.getItem(CHAVE_IGREJA_ATIVA) || null
+    } catch {
+      return null
+    }
+  })
+
+  useEffect(() => {
+    if (!ehSuper || db.igrejas.length === 0) return
+    const valida = igrejaAtivaId && db.igrejas.some((i) => i.id === igrejaAtivaId)
+    const alvo = valida ? igrejaAtivaId : db.perfil?.igreja_id
+    if (alvo && alvo !== igrejaAtivaId) setIgrejaAtivaIdState(alvo)
+    repo.setIgrejaAtiva?.(alvo || null)
+  }, [ehSuper, db.igrejas, db.perfil, igrejaAtivaId])
+
+  const definirIgrejaAtiva = useCallback((id) => {
+    setIgrejaAtivaIdState(id)
+    repo.setIgrejaAtiva?.(id)
+    try {
+      localStorage.setItem(CHAVE_IGREJA_ATIVA, id)
+    } catch {
+      // localStorage indisponível não impede a troca de igreja nesta sessão
+    }
+  }, [])
+
+  // Visão dos dados restrita à igreja ativa. Para todo mundo, exceto a
+  // chave mestre, isso já é o que o RLS devolveu (uma igreja só); a chave
+  // mestre recebe todas as igrejas do banco e escolhe uma para operar.
+  const dbView = useMemo(() => {
+    if (!ehSuper) return db
+    const alvo = db.igrejas.some((i) => i.id === igrejaAtivaId) ? igrejaAtivaId : db.perfil?.igreja_id
+    if (!alvo) return db
+    const porIgreja = (lista) => (lista || []).filter((x) => x.igreja_id === alvo)
+    const departamentos = porIgreja(db.departamentos)
+    const depIds = new Set(departamentos.map((d) => d.id))
+    return {
+      ...db,
+      pessoas: porIgreja(db.pessoas),
+      departamentos,
+      funcoes: porIgreja(db.funcoes),
+      membro_funcoes: porIgreja(db.membro_funcoes),
+      indisponibilidades: porIgreja(db.indisponibilidades),
+      indisponibilidades_semanais: porIgreja(db.indisponibilidades_semanais),
+      escalas: porIgreja(db.escalas),
+      escala_itens: porIgreja(db.escala_itens),
+      perfis: porIgreja(db.perfis),
+      lider_departamentos: (db.lider_departamentos || []).filter((l) => depIds.has(l.departamento_id)),
+    }
+  }, [db, ehSuper, igrejaAtivaId])
 
   // Envolve cada método do repositório: executa e recarrega os dados.
   const acoes = useMemo(() => {
@@ -107,7 +164,8 @@ export function DataProvider({ children }) {
   // Há dados locais para migrar quando o backend é Supabase e a nuvem está vazia?
   const temDadosLocaisParaImportar = useMemo(() => {
     if (repo.nome !== 'supabase' || offline) return false
-    const vazio = Object.values(db).every((lista) => !lista || lista.length === 0)
+    const chaves = ['pessoas', 'departamentos', 'funcoes', 'escalas']
+    const vazio = chaves.every((k) => !dbView[k] || dbView[k].length === 0)
     if (!vazio) return false
     try {
       const local = JSON.parse(localStorage.getItem('escala-igreja-db-v1') || 'null')
@@ -115,52 +173,55 @@ export function DataProvider({ children }) {
     } catch {
       return false
     }
-  }, [db, offline])
+  }, [dbView, offline])
 
-  // Permissões derivadas do perfil: admin tudo; líder edita apenas os
-  // departamentos que lidera; membro é somente leitura.
+  // Permissões derivadas do perfil: super e admin fazem tudo (super em
+  // qualquer igreja que escolher); líder edita apenas os departamentos que
+  // lidera; membro é somente leitura.
   const permissoes = useMemo(() => {
-    const perfil = db.perfil
+    const perfil = dbView.perfil
     const papel = perfil?.papel || null
-    const ehAdmin = papel === 'admin'
+    const ehSuper = papel === 'super'
+    const ehAdmin = ehSuper || papel === 'admin'
     const ehLider = papel === 'lider'
     const liderados = new Set(
-      (db.lider_departamentos || [])
+      (dbView.lider_departamentos || [])
         .filter((l) => l.user_id === perfil?.user_id)
         .map((l) => l.departamento_id)
     )
     const podeEditarDepartamento = (depId) => ehAdmin || (ehLider && liderados.has(depId))
     const podeEditarFuncao = (funcaoId) => {
       if (ehAdmin) return true
-      const f = db.funcoes.find((x) => x.id === funcaoId)
+      const f = dbView.funcoes.find((x) => x.id === funcaoId)
       return f ? podeEditarDepartamento(f.departamento_id) : false
     }
-    // null = todas (admin); Set = apenas estas (líder); Set vazio = nenhuma (membro)
+    // null = todas (admin/super); Set = apenas estas (líder); Set vazio = nenhuma (membro)
     const funcoesPermitidas = ehAdmin
       ? null
-      : new Set(db.funcoes.filter((f) => podeEditarDepartamento(f.departamento_id)).map((f) => f.id))
+      : new Set(dbView.funcoes.filter((f) => podeEditarDepartamento(f.departamento_id)).map((f) => f.id))
     return {
-      perfil, papel, ehAdmin, ehLider,
+      perfil, papel, ehSuper, ehAdmin, ehLider,
       somenteLeitura: !ehAdmin && !ehLider,
       podeGerenciarEscalas: ehAdmin || ehLider,
       departamentosLiderados: liderados,
       podeEditarDepartamento, podeEditarFuncao, funcoesPermitidas,
     }
-  }, [db])
+  }, [dbView])
 
   const valor = useMemo(
     () => ({
-      db, carregando, erro, offline, acoes, permissoes,
+      db: dbView, carregando, erro, offline, acoes, permissoes,
       backend: repo.nome,
       temDadosLocaisParaImportar,
       requerLogin, authPronto, usuario,
+      igrejas: db.igrejas, igrejaAtivaId, definirIgrejaAtiva,
       entrar: repo.auth ? repo.auth.signIn : null,
       cadastrar: repo.auth ? repo.auth.signUp : null,
       sair: repo.auth ? repo.auth.signOut : null,
       recarregar,
       limparErro: () => setErro(null),
     }),
-    [db, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, recarregar]
+    [dbView, db.igrejas, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, igrejaAtivaId, definirIgrejaAtiva, recarregar]
   )
 
   return <DataContext.Provider value={valor}>{children}</DataContext.Provider>
