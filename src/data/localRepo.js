@@ -9,6 +9,7 @@ const VAZIO = {
   funcoes: [],
   membro_funcoes: [],
   indisponibilidades: [],
+  indisponibilidades_semanais: [],
   escalas: [],
   escala_itens: [],
 }
@@ -56,6 +57,7 @@ export const localRepo = {
     db.pessoas = db.pessoas.filter((x) => x.id !== id)
     db.membro_funcoes = db.membro_funcoes.filter((x) => x.pessoa_id !== id)
     db.indisponibilidades = db.indisponibilidades.filter((x) => x.pessoa_id !== id)
+    db.indisponibilidades_semanais = db.indisponibilidades_semanais.filter((x) => x.pessoa_id !== id)
     db.escala_itens = db.escala_itens.map((x) => (x.pessoa_id === id ? { ...x, pessoa_id: null } : x))
     gravar(db)
   },
@@ -125,6 +127,22 @@ export const localRepo = {
   async removeIndisponibilidade(pessoa_id, data) {
     const db = ler()
     db.indisponibilidades = db.indisponibilidades.filter((x) => !(x.pessoa_id === pessoa_id && x.data === data))
+    gravar(db)
+  },
+
+  // ---- indisponibilidades semanais (ex.: "toda quinta") ----
+  async addIndisponibilidadeSemanal(pessoa_id, dia_semana) {
+    const db = ler()
+    if (!db.indisponibilidades_semanais.some((x) => x.pessoa_id === pessoa_id && x.dia_semana === dia_semana)) {
+      db.indisponibilidades_semanais.push({ pessoa_id, dia_semana })
+    }
+    gravar(db)
+  },
+  async removeIndisponibilidadeSemanal(pessoa_id, dia_semana) {
+    const db = ler()
+    db.indisponibilidades_semanais = db.indisponibilidades_semanais.filter(
+      (x) => !(x.pessoa_id === pessoa_id && x.dia_semana === dia_semana)
+    )
     gravar(db)
   },
 

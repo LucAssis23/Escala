@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { Botao, Campo, Modal, Toast, Vazio, estiloInput } from '../components/ui'
-import { formatarDataBR, formatarDataLonga, hojeISO } from '../lib/datas'
+import { DIAS_SEMANA_CHIPS, datasDoMes, formatarDataBR, formatarDataLonga, hojeISO, MESES } from '../lib/datas'
 import { pessoasElegiveis, pessoasDuplicadas, sortearVagas } from '../lib/escalas'
 import { textoWhatsApp, copiarTexto } from '../lib/whatsapp'
 
 export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
   const { db } = useData()
   const [criando, setCriando] = useState(false)
+  const [gerandoMes, setGerandoMes] = useState(false)
 
   const escala = db.escalas.find((e) => e.id === escalaAbertaId)
   if (escala) return <EscalaDetalhe escala={escala} onVoltar={() => setEscalaAbertaId(null)} />
@@ -17,7 +18,8 @@ export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Botao variante="secundario" onClick={() => setGerandoMes(true)}>🗓️ Gerar mês</Botao>
         <Botao onClick={() => setCriando(true)}>+ Nova escala</Botao>
       </div>
 
@@ -29,7 +31,152 @@ export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
       <ListaEscalas titulo="Anteriores" escalas={passadas} abrir={setEscalaAbertaId} />
 
       {criando && <ModalNovaEscala onFechar={() => setCriando(false)} onCriada={setEscalaAbertaId} />}
+      {gerandoMes && <ModalGerarMes onFechar={() => setGerandoMes(false)} />}
     </div>
+  )
+}
+
+// Gera de uma vez todas as escalas do mês nos dias da semana escolhidos
+// (todo domingo, toda quinta…), com sorteio automático opcional que mantém
+// o rodízio justo entre as semanas.
+function ModalGerarMes({ onFechar }) {
+  const { db, acoes } = useData()
+  const agora = new Date()
+  const [mesAno, setMesAno] = useState(
+    `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
+  )
+  const [titulo, setTitulo] = useState('Culto')
+  const [dias, setDias] = useState(new Set([0]))
+  const [selecionadas, setSelecionadas] = useState(new Set())
+  const [sortearAuto, setSortearAuto] = useState(true)
+  const [gerando, setGerando] = useState(false)
+  const [progresso, setProgresso] = useState('')
+
+  const alternarDia = (dia) => {
+    const s = new Set(dias)
+    s.has(dia) ? s.delete(dia) : s.add(dia)
+    setDias(s)
+  }
+  const alternarFuncao = (id) => {
+    const s = new Set(selecionadas)
+    s.has(id) ? s.delete(id) : s.add(id)
+    setSelecionadas(s)
+  }
+
+  const [ano, mes] = mesAno.split('-').map(Number)
+  const datas = mesAno ? datasDoMes(ano, mes, [...dias]) : []
+
+  const gerar = async () => {
+    if (!titulo.trim() || datas.length === 0 || selecionadas.size === 0 || gerando) return
+    setGerando(true)
+    try {
+      // Cópia local do banco: o rodízio de cada escala gerada precisa "ver"
+      // as escalas criadas logo antes dela, sem esperar recarregamentos.
+      const dbLocal = { ...db, escalas: [...db.escalas], escala_itens: [...db.escala_itens] }
+      for (const data of datas) {
+        setProgresso(`Criando ${formatarDataBR(data)}…`)
+        const escala = await acoes.createEscala({ data, titulo: titulo.trim() })
+        const itens = []
+        for (const funcaoId of selecionadas) {
+          itens.push({ ...(await acoes.addEscalaItem(escala.id, funcaoId)) })
+        }
+        dbLocal.escalas.push(escala)
+        dbLocal.escala_itens.push(...itens)
+        if (sortearAuto) {
+          const resultado = sortearVagas({ db: dbLocal, escala, itens, permitirAcumulo: false })
+          await acoes.setEscalaItensPessoas(resultado)
+          for (const { id, pessoa_id } of resultado) {
+            const item = dbLocal.escala_itens.find((i) => i.id === id)
+            if (item) item.pessoa_id = pessoa_id
+          }
+        }
+      }
+      onFechar()
+    } finally {
+      setGerando(false)
+    }
+  }
+
+  return (
+    <Modal titulo="Gerar escalas do mês" aberto onFechar={onFechar}>
+      <div className="space-y-3">
+        <Campo rotulo="Título das escalas *">
+          <input className={estiloInput} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder='Ex.: "Culto"' />
+        </Campo>
+        <Campo rotulo="Mês *">
+          <input type="month" className={estiloInput} value={mesAno} onChange={(e) => setMesAno(e.target.value)} />
+        </Campo>
+
+        <div>
+          <span className="mb-1.5 block text-sm font-medium text-slate-600">Dias da semana *</span>
+          <div className="flex flex-wrap gap-1.5">
+            {DIAS_SEMANA_CHIPS.map((rotulo, dia) => (
+              <button
+                key={dia}
+                type="button"
+                onClick={() => alternarDia(dia)}
+                className={`rounded-full px-3.5 py-2 text-sm font-semibold capitalize transition-colors ${
+                  dias.has(dia) ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+          {mesAno && (
+            <p className="mt-1.5 text-xs text-slate-500">
+              {datas.length === 0
+                ? 'Escolha ao menos um dia da semana.'
+                : `${datas.length} escala(s) em ${MESES[mes - 1]}: ${datas.map((d) => d.slice(8)).join(', ')}`}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <span className="mb-1 block text-sm font-medium text-slate-600">Funções a preencher *</span>
+          <div className="space-y-3">
+            {db.departamentos.map((dep) => {
+              const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
+              if (funcoes.length === 0) return null
+              return (
+                <div key={dep.id}>
+                  <div className="mb-1.5 flex items-center gap-2 text-sm font-bold">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: dep.cor }} />
+                    {dep.nome}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {funcoes.map((f) => (
+                      <label
+                        key={f.id}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                          selecionadas.has(f.id) ? 'border-indigo-400 bg-indigo-50 font-semibold' : 'border-slate-200'
+                        }`}
+                      >
+                        <input type="checkbox" className="h-4 w-4 accent-indigo-600" checked={selecionadas.has(f.id)} onChange={() => alternarFuncao(f.id)} />
+                        {f.nome}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={sortearAuto} onChange={(e) => setSortearAuto(e.target.checked)} />
+          Sortear automaticamente (rodízio justo entre as semanas)
+        </label>
+
+        <Botao
+          className="w-full"
+          disabled={!titulo.trim() || datas.length === 0 || selecionadas.size === 0 || gerando}
+          onClick={gerar}
+        >
+          {gerando ? progresso || 'Gerando…' : `Gerar ${datas.length} escala(s)`}
+        </Botao>
+      </div>
+    </Modal>
   )
 }
 

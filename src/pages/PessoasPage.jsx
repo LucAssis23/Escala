@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { Botao, Campo, Modal, Vazio, estiloInput } from '../components/ui'
-import { formatarDataBR, hojeISO } from '../lib/datas'
+import { DIAS_SEMANA_CHIPS, formatarDataBR, hojeISO } from '../lib/datas'
 
 export default function PessoasPage() {
   const { db, acoes } = useData()
@@ -41,7 +41,9 @@ export default function PessoasPage() {
       <ul className="space-y-2">
         {pessoas.map((p) => {
           const fns = funcoesDe(p.id)
-          const nIndisp = db.indisponibilidades.filter((i) => i.pessoa_id === p.id && i.data >= hojeISO()).length
+          const nIndisp =
+            db.indisponibilidades.filter((i) => i.pessoa_id === p.id && i.data >= hojeISO()).length +
+            db.indisponibilidades_semanais.filter((i) => i.pessoa_id === p.id).length
           return (
             <li key={p.id} className={`rounded-2xl bg-white p-3 shadow-sm ${p.ativo ? '' : 'opacity-60'}`}>
               <div className="flex items-center justify-between gap-2">
@@ -209,10 +211,44 @@ function ModalIndisponibilidades({ pessoa, onFechar }) {
     .map((i) => i.data)
     .sort()
 
+  const diasSemanais = db.indisponibilidades_semanais
+    .filter((i) => i.pessoa_id === pessoa.id)
+    .map((i) => i.dia_semana)
+
   return (
     <Modal titulo={`Indisponibilidades de ${pessoa.nome}`} aberto onFechar={onFechar}>
-      <div className="space-y-3">
-        <p className="text-sm text-slate-500">Datas em que a pessoa não pode servir. Ela não aparecerá nas escalas dessas datas.</p>
+      <div className="space-y-4">
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-slate-600">Toda semana (recorrente)</p>
+          <p className="mb-2 text-xs text-slate-500">
+            Marque os dias em que a pessoa <b>nunca</b> pode — ex.: toda quinta, todo domingo.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {DIAS_SEMANA_CHIPS.map((rotulo, dia) => {
+              const marcado = diasSemanais.includes(dia)
+              return (
+                <button
+                  key={dia}
+                  type="button"
+                  onClick={() =>
+                    marcado
+                      ? acoes.removeIndisponibilidadeSemanal(pessoa.id, dia)
+                      : acoes.addIndisponibilidadeSemanal(pessoa.id, dia)
+                  }
+                  className={`rounded-full px-3.5 py-2 text-sm font-semibold capitalize transition-colors ${
+                    marcado ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {rotulo}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-3">
+          <p className="mb-1.5 text-sm font-medium text-slate-600">Datas avulsas</p>
+          <p className="mb-2 text-xs text-slate-500">Dias específicos em que a pessoa não pode servir.</p>
         <div className="flex gap-2">
           <input type="date" className={estiloInput} value={data} onChange={(e) => setData(e.target.value)} />
           <Botao
@@ -226,8 +262,8 @@ function ModalIndisponibilidades({ pessoa, onFechar }) {
             Adicionar
           </Botao>
         </div>
-        {datas.length === 0 && <p className="text-center text-sm text-slate-400">Nenhuma data cadastrada.</p>}
-        <ul className="space-y-1.5">
+        {datas.length === 0 && <p className="py-2 text-center text-sm text-slate-400">Nenhuma data avulsa cadastrada.</p>}
+        <ul className="mt-2 space-y-1.5">
           {datas.map((d) => (
             <li key={d} className="flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-sm">
               <span className={d < hojeISO() ? 'text-slate-400 line-through' : 'font-medium text-amber-800'}>
@@ -239,6 +275,7 @@ function ModalIndisponibilidades({ pessoa, onFechar }) {
             </li>
           ))}
         </ul>
+        </div>
       </div>
     </Modal>
   )

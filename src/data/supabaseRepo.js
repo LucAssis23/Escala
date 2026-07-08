@@ -15,17 +15,42 @@ export function criarSupabaseRepo(url, anonKey) {
     nome: 'supabase',
 
     async loadAll() {
-      const [pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, escalas, escala_itens] =
+      const [pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens] =
         await Promise.all([
           q(sb.from('pessoas').select('*').order('nome')),
           q(sb.from('departamentos').select('*').order('nome')),
           q(sb.from('funcoes').select('*').order('nome')),
           q(sb.from('membro_funcoes').select('*')),
           q(sb.from('indisponibilidades').select('*')),
+          q(sb.from('indisponibilidades_semanais').select('*')),
           q(sb.from('escalas').select('*').order('data')),
           q(sb.from('escala_itens').select('*')),
         ])
-      return { pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, escalas, escala_itens }
+      return { pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens }
+    },
+
+    // ---- autenticação (Supabase Auth) ----
+    auth: {
+      async getUser() {
+        const { data } = await sb.auth.getSession()
+        return data.session?.user ?? null
+      },
+      async signIn(email, senha) {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password: senha })
+        if (error) {
+          throw new Error(
+            /invalid login credentials/i.test(error.message) ? 'E-mail ou senha incorretos' : error.message
+          )
+        }
+        return data.user
+      },
+      async signOut() {
+        await sb.auth.signOut()
+      },
+      onChange(cb) {
+        const { data } = sb.auth.onAuthStateChange((_evento, sessao) => cb(sessao?.user ?? null))
+        return () => data.subscription.unsubscribe()
+      },
     },
 
     async createPessoa({ nome, telefone, ativo = true }) {
@@ -72,6 +97,13 @@ export function criarSupabaseRepo(url, anonKey) {
       await q(sb.from('indisponibilidades').delete().eq('pessoa_id', pessoa_id).eq('data', data))
     },
 
+    async addIndisponibilidadeSemanal(pessoa_id, dia_semana) {
+      await q(sb.from('indisponibilidades_semanais').upsert({ pessoa_id, dia_semana }))
+    },
+    async removeIndisponibilidadeSemanal(pessoa_id, dia_semana) {
+      await q(sb.from('indisponibilidades_semanais').delete().eq('pessoa_id', pessoa_id).eq('dia_semana', dia_semana))
+    },
+
     async createEscala({ data, titulo }) {
       return (await q(sb.from('escalas').insert({ data, titulo }).select()))[0]
     },
@@ -108,6 +140,7 @@ export function criarSupabaseRepo(url, anonKey) {
       await inserir('funcoes', db.funcoes)
       await inserir('membro_funcoes', db.membro_funcoes)
       await inserir('indisponibilidades', db.indisponibilidades)
+      await inserir('indisponibilidades_semanais', db.indisponibilidades_semanais)
       await inserir('escalas', db.escalas)
       await inserir('escala_itens', db.escala_itens)
     },
