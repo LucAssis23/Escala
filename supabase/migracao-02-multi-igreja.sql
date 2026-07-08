@@ -43,8 +43,8 @@ create table if not exists lider_departamentos (
 
 -- ✏️ AS DUAS IGREJAS INICIAIS (edite nome e código à vontade)
 insert into igrejas (nome, codigo_convite) values
-  ('Igreja 1', 'IGREJA1'),
-  ('Igreja 2', 'IGREJA2')
+  ('ICPB PENHA', 'ICPB'),
+  ('Casa da Rocha', 'Casa_da_Rocha')
 on conflict (codigo_convite) do nothing;
 
 -- ---------- 2) Funções auxiliares (security definer evita recursão de RLS) ----------
