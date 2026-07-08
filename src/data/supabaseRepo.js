@@ -15,7 +15,26 @@ export function criarSupabaseRepo(url, anonKey) {
     nome: 'supabase',
 
     async loadAll() {
-      const [pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens] =
+      // Perfil do usuário logado (papel, igreja, aprovação) rege o que carregar.
+      const { data: sess } = await sb.auth.getSession()
+      const uid = sess.session?.user?.id
+      let perfil = null
+      if (uid) {
+        const rows = await q(
+          sb.from('perfis').select('*, igreja:igrejas(id, nome, codigo_convite)').eq('user_id', uid)
+        )
+        perfil = rows[0] || null
+      }
+
+      const vazio = {
+        pessoas: [], departamentos: [], funcoes: [], membro_funcoes: [],
+        indisponibilidades: [], indisponibilidades_semanais: [], escalas: [], escala_itens: [],
+        perfis: [], lider_departamentos: [], perfil,
+      }
+      // Sem perfil ou aguardando aprovação: o RLS bloqueia tudo mesmo — nem tenta.
+      if (!perfil || !perfil.aprovado) return vazio
+
+      const [pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens, perfis, lider_departamentos] =
         await Promise.all([
           q(sb.from('pessoas').select('*').order('nome')),
           q(sb.from('departamentos').select('*').order('nome')),
@@ -25,8 +44,26 @@ export function criarSupabaseRepo(url, anonKey) {
           q(sb.from('indisponibilidades_semanais').select('*')),
           q(sb.from('escalas').select('*').order('data')),
           q(sb.from('escala_itens').select('*')),
+          q(sb.from('perfis').select('*').order('nome')),
+          q(sb.from('lider_departamentos').select('*')),
         ])
-      return { pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens }
+      return { pessoas, departamentos, funcoes, membro_funcoes, indisponibilidades, indisponibilidades_semanais, escalas, escala_itens, perfis, lider_departamentos, perfil }
+    },
+
+    // ---- equipe (só admin; o RLS garante) ----
+    async updatePerfil(user_id, patch) {
+      await q(sb.from('perfis').update(patch).eq('user_id', user_id))
+    },
+    async deletePerfil(user_id) {
+      await q(sb.from('perfis').delete().eq('user_id', user_id))
+    },
+    async setLiderDepartamentos(user_id, departamentoIds) {
+      await q(sb.from('lider_departamentos').delete().eq('user_id', user_id))
+      if (departamentoIds.length) {
+        await q(sb.from('lider_departamentos').insert(
+          departamentoIds.map((departamento_id) => ({ user_id, departamento_id }))
+        ))
+      }
     },
 
     // ---- autenticação (Supabase Auth) ----
@@ -46,6 +83,29 @@ export function criarSupabaseRepo(url, anonKey) {
       },
       async signOut() {
         await sb.auth.signOut()
+      },
+      // Cadastro: cria a conta e vincula à igreja pelo código de convite.
+      async signUp(nome, email, senha, codigoIgreja) {
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password: senha,
+          options: { data: { nome } },
+        })
+        if (error) {
+          if (/already registered/i.test(error.message)) throw new Error('Este e-mail já tem uma conta — use "Entrar".')
+          if (/at least 6/i.test(error.message)) throw new Error('A senha precisa ter pelo menos 6 caracteres.')
+          throw new Error(error.message)
+        }
+        if (!data.session) {
+          throw new Error(
+            'Conta criada, mas o projeto exige confirmação de e-mail. Peça ao administrador para desativar "Confirm email" no Supabase e tente entrar.'
+          )
+        }
+        const { error: e2 } = await sb.rpc('entrar_na_igreja', { codigo: codigoIgreja, nome_usuario: nome })
+        if (e2) {
+          throw new Error(/inválido/i.test(e2.message) ? 'Código de igreja inválido — confira com o seu líder.' : e2.message)
+        }
+        return data.user
       },
       onChange(cb) {
         const { data } = sb.auth.onAuthStateChange((_evento, sessao) => cb(sessao?.user ?? null))
@@ -83,11 +143,11 @@ export function criarSupabaseRepo(url, anonKey) {
       await q(sb.from('funcoes').delete().eq('id', id))
     },
 
-    async setMembroFuncoes(pessoa_id, funcaoIds) {
-      await q(sb.from('membro_funcoes').delete().eq('pessoa_id', pessoa_id))
-      if (funcaoIds.length) {
-        await q(sb.from('membro_funcoes').insert(funcaoIds.map((funcao_id) => ({ pessoa_id, funcao_id }))))
-      }
+    async addMembroFuncao(pessoa_id, funcao_id) {
+      await q(sb.from('membro_funcoes').upsert({ pessoa_id, funcao_id }))
+    },
+    async removeMembroFuncao(pessoa_id, funcao_id) {
+      await q(sb.from('membro_funcoes').delete().eq('pessoa_id', pessoa_id).eq('funcao_id', funcao_id))
     },
 
     async addIndisponibilidade(pessoa_id, data) {

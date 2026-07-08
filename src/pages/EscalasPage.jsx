@@ -6,7 +6,7 @@ import { pessoasElegiveis, pessoasDuplicadas, sortearVagas } from '../lib/escala
 import { textoWhatsApp, copiarTexto } from '../lib/whatsapp'
 
 export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
-  const { db } = useData()
+  const { db, permissoes } = useData()
   const [criando, setCriando] = useState(false)
   const [gerandoMes, setGerandoMes] = useState(false)
 
@@ -18,13 +18,20 @@ export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end gap-2">
-        <Botao variante="secundario" onClick={() => setGerandoMes(true)}>🗓️ Gerar mês</Botao>
-        <Botao onClick={() => setCriando(true)}>+ Nova escala</Botao>
-      </div>
+      {permissoes.podeGerenciarEscalas && (
+        <div className="flex justify-end gap-2">
+          <Botao variante="secundario" onClick={() => setGerandoMes(true)}>🗓️ Gerar mês</Botao>
+          <Botao onClick={() => setCriando(true)}>+ Nova escala</Botao>
+        </div>
+      )}
 
       {db.escalas.length === 0 && (
-        <Vazio>Nenhuma escala criada. Cadastre pessoas, departamentos e funções, depois crie a primeira escala.</Vazio>
+        <Vazio icone="📋">
+          Nenhuma escala criada
+          {permissoes.podeGerenciarEscalas
+            ? '. Cadastre pessoas, departamentos e funções, depois crie a primeira escala.'
+            : ' ainda.'}
+        </Vazio>
       )}
 
       <ListaEscalas titulo="Próximas" escalas={futuras} abrir={setEscalaAbertaId} />
@@ -40,7 +47,7 @@ export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
 // (todo domingo, toda quinta…), com sorteio automático opcional que mantém
 // o rodízio justo entre as semanas.
 function ModalGerarMes({ onFechar }) {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   const agora = new Date()
   const [mesAno, setMesAno] = useState(
     `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
@@ -83,7 +90,10 @@ function ModalGerarMes({ onFechar }) {
         dbLocal.escalas.push(escala)
         dbLocal.escala_itens.push(...itens)
         if (sortearAuto) {
-          const resultado = sortearVagas({ db: dbLocal, escala, itens, permitirAcumulo: false })
+          const resultado = sortearVagas({
+            db: dbLocal, escala, itens, permitirAcumulo: false,
+            funcoesPermitidas: permissoes.funcoesPermitidas,
+          })
           await acoes.setEscalaItensPessoas(resultado)
           for (const { id, pessoa_id } of resultado) {
             const item = dbLocal.escala_itens.find((i) => i.id === id)
@@ -135,7 +145,7 @@ function ModalGerarMes({ onFechar }) {
         <div>
           <span className="mb-1 block text-sm font-medium text-slate-600">Funções a preencher *</span>
           <div className="space-y-3">
-            {db.departamentos.map((dep) => {
+            {db.departamentos.filter((dep) => permissoes.podeEditarDepartamento(dep.id)).map((dep) => {
               const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
               if (funcoes.length === 0) return null
               return (
@@ -186,7 +196,7 @@ function ListaEscalas({ titulo, escalas, abrir }) {
   return (
     <div>
       <h2 className="mb-2 mt-4 text-sm font-bold uppercase tracking-wide text-slate-400">{titulo}</h2>
-      <ul className="space-y-2">
+      <ul className="grid gap-2 sm:grid-cols-2">
         {escalas.map((e) => {
           const itens = db.escala_itens.filter((i) => i.escala_id === e.id)
           const vagas = itens.filter((i) => !i.pessoa_id).length
@@ -215,7 +225,7 @@ function ListaEscalas({ titulo, escalas, abrir }) {
 
 // Criação: data, título e quais funções serão preenchidas (checkboxes por departamento).
 function ModalNovaEscala({ onFechar, onCriada }) {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   const [data, setData] = useState(hojeISO())
   const [titulo, setTitulo] = useState('')
   const [selecionadas, setSelecionadas] = useState(new Set())
@@ -264,7 +274,7 @@ function ModalNovaEscala({ onFechar, onCriada }) {
             <p className="text-sm text-slate-500">Cadastre funções na aba “Deptos” primeiro.</p>
           )}
           <div className="space-y-3">
-            {db.departamentos.map((dep) => {
+            {db.departamentos.filter((dep) => permissoes.podeEditarDepartamento(dep.id)).map((dep) => {
               const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
               if (funcoes.length === 0) return null
               return (
@@ -303,7 +313,7 @@ function ModalNovaEscala({ onFechar, onCriada }) {
 
 // Detalhe: preenchimento manual, sorteio, acúmulo, WhatsApp.
 function EscalaDetalhe({ escala, onVoltar }) {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   const [permitirAcumulo, setPermitirAcumulo] = useState(false)
   const [toast, setToast] = useState('')
   const [editandoCabecalho, setEditandoCabecalho] = useState(false)
@@ -334,7 +344,10 @@ function EscalaDetalhe({ escala, onVoltar }) {
   }
 
   const sortear = async () => {
-    const resultado = sortearVagas({ db, escala, itens, permitirAcumulo })
+    const resultado = sortearVagas({
+      db, escala, itens, permitirAcumulo,
+      funcoesPermitidas: permissoes.funcoesPermitidas,
+    })
     if (resultado.length === 0) return avisar('Nenhuma vaga em aberto para sortear')
     await acoes.setEscalaItensPessoas(resultado)
     const preenchidas = resultado.filter((r) => r.pessoa_id).length
@@ -359,10 +372,12 @@ function EscalaDetalhe({ escala, onVoltar }) {
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold">{escala.titulo}</h2>
+            <h2 className="text-lg font-bold tracking-tight">{escala.titulo}</h2>
             <p className="text-sm capitalize text-slate-500">{formatarDataLonga(escala.data)}</p>
           </div>
-          <button className="text-sm font-semibold text-indigo-600" onClick={() => setEditandoCabecalho(true)}>Editar</button>
+          {permissoes.podeGerenciarEscalas && (
+            <button className="text-sm font-semibold text-indigo-600" onClick={() => setEditandoCabecalho(true)}>Editar</button>
+          )}
         </div>
 
         {vagasAbertas > 0 && (
@@ -376,19 +391,23 @@ function EscalaDetalhe({ escala, onVoltar }) {
           </div>
         )}
 
-        <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-          <input
-            type="checkbox"
-            className="h-5 w-5 accent-indigo-600"
-            checked={permitirAcumulo}
-            onChange={(e) => setPermitirAcumulo(e.target.checked)}
-          />
-          Permitir acúmulo (mesma pessoa em 2+ funções)
-        </label>
+        {permissoes.podeGerenciarEscalas && (
+          <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-indigo-600"
+              checked={permitirAcumulo}
+              onChange={(e) => setPermitirAcumulo(e.target.checked)}
+            />
+            Permitir acúmulo (mesma pessoa em 2+ funções)
+          </label>
+        )}
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Botao onClick={sortear}>🎲 Sortear vagas</Botao>
-          <Botao variante="verde" onClick={copiarWhats}>📲 Copiar p/ WhatsApp</Botao>
+          {permissoes.podeGerenciarEscalas && <Botao onClick={sortear}>🎲 Sortear vagas</Botao>}
+          <Botao variante="verde" className={permissoes.podeGerenciarEscalas ? '' : 'col-span-2'} onClick={copiarWhats}>
+            📲 Copiar p/ WhatsApp
+          </Botao>
         </div>
       </div>
 
@@ -403,20 +422,26 @@ function EscalaDetalhe({ escala, onVoltar }) {
         </div>
       ))}
 
-      <div className="flex gap-2">
-        <Botao variante="secundario" className="flex-1" onClick={() => setAdicionandoFuncao(true)}>+ Adicionar função</Botao>
-        <Botao
-          variante="perigo"
-          onClick={async () => {
-            if (confirm(`Excluir a escala "${escala.titulo}"?`)) {
-              await acoes.deleteEscala(escala.id)
-              onVoltar()
-            }
-          }}
-        >
-          Excluir escala
-        </Botao>
-      </div>
+      {(permissoes.podeGerenciarEscalas || permissoes.ehAdmin) && (
+        <div className="flex gap-2">
+          {permissoes.podeGerenciarEscalas && (
+            <Botao variante="secundario" className="flex-1" onClick={() => setAdicionandoFuncao(true)}>+ Adicionar função</Botao>
+          )}
+          {permissoes.ehAdmin && (
+            <Botao
+              variante="perigo"
+              onClick={async () => {
+                if (confirm(`Excluir a escala "${escala.titulo}"?`)) {
+                  await acoes.deleteEscala(escala.id)
+                  onVoltar()
+                }
+              }}
+            >
+              Excluir escala
+            </Botao>
+          )}
+        </div>
+      )}
 
       {editandoCabecalho && (
         <ModalCabecalho escala={escala} onFechar={() => setEditandoCabecalho(false)} />
@@ -429,10 +454,11 @@ function EscalaDetalhe({ escala, onVoltar }) {
 }
 
 function ItemEscala({ item, escala, duplicada }) {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   const funcao = db.funcoes.find((f) => f.id === item.funcao_id)
   const elegiveis = pessoasElegiveis(db, item.funcao_id, escala.data, item.pessoa_id)
   const vazio = !item.pessoa_id
+  const podeEditar = permissoes.podeEditarFuncao(item.funcao_id)
 
   return (
     <li className={`flex items-center gap-2 px-3 py-2.5 ${vazio ? 'bg-red-50' : duplicada ? 'bg-amber-50' : ''}`}>
@@ -443,25 +469,34 @@ function ItemEscala({ item, escala, duplicada }) {
           <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">ACÚMULO</span>
         )}
       </div>
-      <select
-        className={`${estiloInput} flex-1 ${vazio ? 'border-red-300' : duplicada ? 'border-amber-400' : ''}`}
-        value={item.pessoa_id || ''}
-        onChange={(e) => acoes.setEscalaItemPessoa(item.id, e.target.value || null)}
-      >
-        <option value="">— em aberto —</option>
-        {elegiveis.map((p) => (
-          <option key={p.id} value={p.id}>{p.nome}</option>
-        ))}
-      </select>
-      <button
-        className="shrink-0 p-1 text-slate-400"
-        aria-label="Remover função da escala"
-        onClick={() => {
-          if (confirm(`Remover "${funcao?.nome}" desta escala?`)) acoes.removeEscalaItem(item.id)
-        }}
-      >
-        ✕
-      </button>
+      {podeEditar ? (
+        <select
+          className={`${estiloInput} flex-1 ${vazio ? 'border-red-300' : duplicada ? 'border-amber-400' : ''}`}
+          value={item.pessoa_id || ''}
+          onChange={(e) => acoes.setEscalaItemPessoa(item.id, e.target.value || null)}
+        >
+          <option value="">— em aberto —</option>
+          {elegiveis.map((p) => (
+            <option key={p.id} value={p.id}>{p.nome}</option>
+          ))}
+        </select>
+      ) : (
+        <div className="flex-1 rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+          {db.pessoas.find((p) => p.id === item.pessoa_id)?.nome || '— em aberto —'}
+          <span className="ml-1.5 text-slate-300" title="Somente o líder deste departamento pode alterar">🔒</span>
+        </div>
+      )}
+      {podeEditar && (
+        <button
+          className="shrink-0 p-1 text-slate-400"
+          aria-label="Remover função da escala"
+          onClick={() => {
+            if (confirm(`Remover "${funcao?.nome}" desta escala?`)) acoes.removeEscalaItem(item.id)
+          }}
+        >
+          ✕
+        </button>
+      )}
     </li>
   )
 }
@@ -494,11 +529,11 @@ function ModalCabecalho({ escala, onFechar }) {
 }
 
 function ModalAdicionarFuncao({ escala, itens, onFechar }) {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   return (
     <Modal titulo="Adicionar função à escala" aberto onFechar={onFechar}>
       <div className="space-y-3">
-        {db.departamentos.map((dep) => {
+        {db.departamentos.filter((dep) => permissoes.podeEditarDepartamento(dep.id)).map((dep) => {
           const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
           if (funcoes.length === 0) return null
           return (

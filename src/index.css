@@ -7,3 +7,31 @@ html {
 body {
   @apply bg-slate-100 text-slate-900 antialiased;
 }
+
+/* ---- animações utilitárias ---- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.anim-fade-in { animation: fade-in 0.2s ease-out both; }
+.anim-slide-up { animation: slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.anim-scale-in { animation: scale-in 0.18s ease-out both; }
+.anim-shimmer { animation: shimmer 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-in, .anim-slide-up, .anim-scale-in, .anim-shimmer { animation: none; }
+}

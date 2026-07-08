@@ -35,7 +35,23 @@ export const localRepo = {
   nome: 'localStorage',
 
   async loadAll() {
-    return ler()
+    // No modo local não há login: quem usa o aparelho é "admin" de tudo.
+    // (chaves escala-teste-* permitem simular papéis nos testes de interface)
+    const perfil = {
+      user_id: 'local',
+      nome: 'Uso local',
+      email: '',
+      papel: localStorage.getItem('escala-teste-papel') || 'admin',
+      aprovado: true,
+      igreja: null,
+    }
+    let lider_departamentos = []
+    try {
+      lider_departamentos = JSON.parse(localStorage.getItem('escala-teste-lider-deps') || '[]')
+    } catch {
+      lider_departamentos = []
+    }
+    return { ...ler(), perfil, perfis: [], lider_departamentos }
   },
 
   // ---- pessoas ----
@@ -109,10 +125,18 @@ export const localRepo = {
   },
 
   // ---- vínculo pessoa ↔ funções ----
-  async setMembroFuncoes(pessoa_id, funcaoIds) {
+  async addMembroFuncao(pessoa_id, funcao_id) {
     const db = ler()
-    db.membro_funcoes = db.membro_funcoes.filter((x) => x.pessoa_id !== pessoa_id)
-    for (const funcao_id of funcaoIds) db.membro_funcoes.push({ pessoa_id, funcao_id })
+    if (!db.membro_funcoes.some((x) => x.pessoa_id === pessoa_id && x.funcao_id === funcao_id)) {
+      db.membro_funcoes.push({ pessoa_id, funcao_id })
+    }
+    gravar(db)
+  },
+  async removeMembroFuncao(pessoa_id, funcao_id) {
+    const db = ler()
+    db.membro_funcoes = db.membro_funcoes.filter(
+      (x) => !(x.pessoa_id === pessoa_id && x.funcao_id === funcao_id)
+    )
     gravar(db)
   },
 

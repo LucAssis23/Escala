@@ -52,6 +52,8 @@ function embaralhar(arr) {
 }
 
 // Sorteia pessoas para os itens em aberto de uma escala.
+// `funcoesPermitidas`: null = todas; Set = sorteia apenas itens dessas funções
+// (líder de departamento só mexe nas vagas dos seus departamentos).
 // Regras:
 //  - nunca escala pessoa indisponível na data (via pessoasElegiveis);
 //  - por padrão não repete pessoa na mesma escala; com permitirAcumulo=true
@@ -60,15 +62,18 @@ function embaralhar(arr) {
 //    (empates decididos aleatoriamente);
 //  - sem candidato → item fica em aberto (pessoa_id null).
 // Retorna [{ id, pessoa_id }] apenas para os itens que estavam vazios.
-export function sortearVagas({ db, escala, itens, permitirAcumulo }) {
+export function sortearVagas({ db, escala, itens, permitirAcumulo, funcoesPermitidas = null }) {
   const contagem = contagem60Dias(db, escala.data, escala.id)
   const usados = new Map() // pessoa_id -> quantas vezes já está nesta escala
   for (const item of itens) {
     if (item.pessoa_id) usados.set(item.pessoa_id, (usados.get(item.pessoa_id) || 0) + 1)
   }
 
+  const sorteaveis = itens.filter(
+    (i) => !i.pessoa_id && (!funcoesPermitidas || funcoesPermitidas.has(i.funcao_id))
+  )
   const resultado = []
-  for (const item of embaralhar(itens.filter((i) => !i.pessoa_id))) {
+  for (const item of embaralhar(sorteaveis)) {
     const candidatos = pessoasElegiveis(db, item.funcao_id, escala.data)
     const livres = candidatos.filter((p) => !usados.has(p.id))
     const pool = livres.length ? livres : permitirAcumulo ? candidatos : []

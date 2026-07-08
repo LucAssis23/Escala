@@ -52,15 +52,20 @@ Com o Supabase configurado, o app funciona em modo híbrido:
 - **Cache local automático**: cada leitura bem-sucedida fica guardada no aparelho; se a internet cair, o app abre normalmente com a última versão sincronizada (selo "📴 Offline") — só as alterações exigem conexão.
 - **Migração com um clique**: se você já usou o modo local e a nuvem estiver vazia, o app oferece um botão "Importar dados deste aparelho" para enviar tudo ao Supabase sem digitar nada de novo.
 
-### Login e senha
+### Login, cadastro e papéis (multi-igreja)
 
-No modo Supabase o app exige login. Os acessos são criados pelo administrador no painel do Supabase, em **Authentication → Users → Add user** (e-mail + senha) — não há cadastro aberto, então só quem você criar consegue entrar. As políticas de RLS do `schema.sql` liberam os dados apenas para usuários autenticados.
+O mesmo site atende **várias igrejas** com dados totalmente separados (RLS por `igreja_id`):
 
-Se você criou o banco com a versão antiga do `schema.sql` (sem login), rode também o arquivo [`supabase/migracao-01-login-e-dias-semana.sql`](supabase/migracao-01-login-e-dias-semana.sql) no SQL Editor — **depois** de criar o primeiro usuário.
+- **Cadastro na tela de login**: a pessoa cria a conta com nome, e-mail, senha e o **código da igreja** (ex.: `IGREJA1`) e fica **aguardando aprovação**.
+- **Papéis**: `admin` (tudo na igreja: pessoas, departamentos, equipe), `lider` (funções, vínculos e vagas de escala **dos departamentos que lidera**) e `membro` (somente leitura).
+- **Equipe & acessos**: o admin aprova cadastros, define papéis e escolhe os departamentos de cada líder na aba Pessoas → "👤 Equipe & acessos".
+- As regras valem no banco (políticas RLS), não só na interface.
 
-### Para usar em outras igrejas
-
-Cada igreja usa a sua própria instância: crie um novo projeto no Supabase (grátis), rode o `schema.sql`, crie os usuários da equipe e faça um novo deploy apontando para as credenciais desse projeto. Os dados ficam totalmente separados entre igrejas.
+Configuração no Supabase:
+1. Banco novo: rode `schema.sql`. Banco existente: rode `migracao-01` e depois [`migracao-02-multi-igreja.sql`](supabase/migracao-02-multi-igreja.sql) (usuários existentes viram admin da Igreja 1; edite nomes/códigos das igrejas no arquivo).
+2. Em **Authentication → Sign In / Up**, desative **"Confirm email"** (o gate de segurança é a aprovação do admin).
+3. Primeiro admin de uma igreja nova: a pessoa se cadastra no app e você roda
+   `update perfis set papel='admin', aprovado=true where email='email@exemplo.com';`
 
 ## Deploy gratuito na Vercel
 
