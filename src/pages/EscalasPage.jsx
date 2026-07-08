@@ -4,6 +4,7 @@ import { Botao, Campo, Modal, Toast, Vazio, estiloInput } from '../components/ui
 import { DIAS_SEMANA_CHIPS, datasDoMes, formatarDataBR, formatarDataLonga, hojeISO, MESES } from '../lib/datas'
 import { pessoasElegiveis, pessoasDuplicadas, sortearVagas } from '../lib/escalas'
 import { textoWhatsApp, copiarTexto } from '../lib/whatsapp'
+import { gerarImagemEscala, compartilharOuBaixarImagem } from '../lib/imagemEscala'
 
 export default function EscalasPage({ escalaAbertaId, setEscalaAbertaId }) {
   const { db, permissoes } = useData()
@@ -318,6 +319,7 @@ function EscalaDetalhe({ escala, onVoltar }) {
   const [toast, setToast] = useState('')
   const [editandoCabecalho, setEditandoCabecalho] = useState(false)
   const [adicionandoFuncao, setAdicionandoFuncao] = useState(false)
+  const [gerandoImagem, setGerandoImagem] = useState(false)
 
   const itens = useMemo(
     () => db.escala_itens.filter((i) => i.escala_id === escala.id),
@@ -361,6 +363,21 @@ function EscalaDetalhe({ escala, onVoltar }) {
   const copiarWhats = async () => {
     const ok = await copiarTexto(textoWhatsApp({ escala, itens, db }))
     avisar(ok ? '✅ Texto copiado! Cole no WhatsApp.' : 'Não foi possível copiar')
+  }
+
+  const baixarImagem = async () => {
+    setGerandoImagem(true)
+    try {
+      const blob = await gerarImagemEscala({ escala, itens, db, nomeIgreja: permissoes.perfil?.igreja?.nome })
+      const nomeArquivo = `escala-${escala.data}.png`
+      const resultado = await compartilharOuBaixarImagem(blob, nomeArquivo)
+      if (resultado === 'baixado') avisar('🖼️ Imagem baixada!')
+      if (resultado === 'compartilhado') avisar('🖼️ Compartilhado!')
+    } catch {
+      avisar('Não foi possível gerar a imagem')
+    } finally {
+      setGerandoImagem(false)
+    }
   }
 
   return (
@@ -407,6 +424,9 @@ function EscalaDetalhe({ escala, onVoltar }) {
           {permissoes.podeGerenciarEscalas && <Botao onClick={sortear}>🎲 Sortear vagas</Botao>}
           <Botao variante="verde" className={permissoes.podeGerenciarEscalas ? '' : 'col-span-2'} onClick={copiarWhats}>
             📲 Copiar p/ WhatsApp
+          </Botao>
+          <Botao variante="secundario" className="col-span-2" disabled={gerandoImagem} onClick={baixarImagem}>
+            {gerandoImagem ? 'Gerando…' : '🖼️ Baixar / compartilhar imagem'}
           </Botao>
         </div>
       </div>
