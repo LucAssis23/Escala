@@ -43,3 +43,16 @@ export function mesmoMes(iso, ano, mes /* 1-12 */) {
   const [a, m] = iso.split('-').map(Number)
   return a === ano && m === mes
 }
+
+// Todas as datas de um mês que caem nos dias da semana escolhidos (0=dom … 6=sáb).
+export function datasDoMes(ano, mes /* 1-12 */, diasSemana /* array de 0-6 */) {
+  const datas = []
+  const d = new Date(ano, mes - 1, 1)
+  while (d.getMonth() === mes - 1) {
+    if (diasSemana.includes(d.getDay())) datas.push(toISO(d))
+    d.setDate(d.getDate() + 1)
+  }
+  return datas
+}
+
+export const DIAS_SEMANA_CHIPS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']

@@ -8,8 +8,10 @@ Aplicativo web (mobile-first, pt-BR) para gestão de escalas de voluntários da 
 
 - CRUD de pessoas, departamentos (com cor) e funções.
 - Vínculo pessoa ↔ funções com checkboxes agrupados por departamento (muitos-para-muitos em dois níveis).
-- Indisponibilidades por pessoa e data.
+- Indisponibilidades por pessoa: datas avulsas **e recorrentes por dia da semana** ("toda quinta", "todo domingo").
 - Criação de escala escolhendo data, título e funções a preencher.
+- **Gerar o mês completo**: escolha o mês, os dias da semana (todo domingo, toda quinta…) e as funções — o app cria todas as escalas de uma vez, com sorteio automático opcional que mantém o rodízio justo entre as semanas.
+- **Login e senha** (modo Supabase): só usuários criados pelo administrador acessam os dados.
 - Preenchimento **manual**: cada dropdown lista só quem tem a função e está disponível na data.
 - Preenchimento por **sorteio**: nunca escala indisponível; não repete pessoa na escala (toggle "permitir acúmulo" com badge amarelo de aviso); rodízio justo priorizando quem serviu menos nos últimos 60 dias; vaga sem candidato fica **em aberto** com destaque vermelho.
 - Edição manual de qualquer posição após o sorteio.
@@ -50,7 +52,15 @@ Com o Supabase configurado, o app funciona em modo híbrido:
 - **Cache local automático**: cada leitura bem-sucedida fica guardada no aparelho; se a internet cair, o app abre normalmente com a última versão sincronizada (selo "📴 Offline") — só as alterações exigem conexão.
 - **Migração com um clique**: se você já usou o modo local e a nuvem estiver vazia, o app oferece um botão "Importar dados deste aparelho" para enviar tudo ao Supabase sem digitar nada de novo.
 
-> As políticas de RLS do `schema.sql` são permissivas (qualquer pessoa com o link acessa tudo), o que é adequado para um app interno de igreja sem login. O próprio arquivo indica como restringir quando você quiser adicionar autenticação.
+### Login e senha
+
+No modo Supabase o app exige login. Os acessos são criados pelo administrador no painel do Supabase, em **Authentication → Users → Add user** (e-mail + senha) — não há cadastro aberto, então só quem você criar consegue entrar. As políticas de RLS do `schema.sql` liberam os dados apenas para usuários autenticados.
+
+Se você criou o banco com a versão antiga do `schema.sql` (sem login), rode também o arquivo [`supabase/migracao-01-login-e-dias-semana.sql`](supabase/migracao-01-login-e-dias-semana.sql) no SQL Editor — **depois** de criar o primeiro usuário.
+
+### Para usar em outras igrejas
+
+Cada igreja usa a sua própria instância: crie um novo projeto no Supabase (grátis), rode o `schema.sql`, crie os usuários da equipe e faça um novo deploy apontando para as credenciais desse projeto. Os dados ficam totalmente separados entre igrejas.
 
 ## Deploy gratuito na Vercel
 

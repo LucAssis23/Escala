@@ -1,13 +1,18 @@
 // Regras de negócio das escalas: elegibilidade, rodízio justo e sorteio.
-import { addDias } from './datas'
+import { addDias, parseISO } from './datas'
 
 // Pessoas aptas a uma função em uma data: têm a função, estão ativas e
-// não estão indisponíveis na data. `manterPessoaId` mantém no dropdown a
+// não estão indisponíveis na data (nem em data avulsa, nem no dia da semana
+// recorrente — ex.: "toda quinta"). `manterPessoaId` mantém no dropdown a
 // pessoa já atribuída (mesmo que tenha ficado inativa/indisponível depois).
 export function pessoasElegiveis(db, funcaoId, data, manterPessoaId = null) {
-  const indisponiveis = new Set(
-    db.indisponibilidades.filter((i) => i.data === data).map((i) => i.pessoa_id)
-  )
+  const diaSemana = parseISO(data).getDay()
+  const indisponiveis = new Set([
+    ...db.indisponibilidades.filter((i) => i.data === data).map((i) => i.pessoa_id),
+    ...(db.indisponibilidades_semanais || [])
+      .filter((i) => i.dia_semana === diaSemana)
+      .map((i) => i.pessoa_id),
+  ])
   const temFuncao = new Set(
     db.membro_funcoes.filter((mf) => mf.funcao_id === funcaoId).map((mf) => mf.pessoa_id)
   )
