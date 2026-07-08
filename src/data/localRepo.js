@@ -51,7 +51,7 @@ export const localRepo = {
     } catch {
       lider_departamentos = []
     }
-    return { ...ler(), perfil, perfis: [], lider_departamentos }
+    return { ...ler(), perfil, perfis: [], lider_departamentos, igrejas: [] }
   },
 
   // ---- pessoas ----

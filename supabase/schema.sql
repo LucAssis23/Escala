@@ -5,7 +5,8 @@
 -- Se o seu banco já existia antes do multi-igreja, NÃO rode este
 -- arquivo: use as migrações (migracao-01 e migracao-02).
 --
--- Papéis: admin (tudo na igreja) · lider (seus departamentos) ·
+-- Papéis: super (chave mestre: admin de TODAS as igrejas) ·
+--         admin (tudo na sua igreja) · lider (seus departamentos) ·
 --         membro (somente leitura). Cadastro no app usa o código
 --         de convite da igreja e aguarda aprovação do admin.
 --
@@ -34,7 +35,7 @@ create table if not exists perfis (
   igreja_id uuid not null references igrejas(id) on delete cascade,
   nome text not null,
   email text not null default '',
-  papel text not null default 'membro' check (papel in ('admin', 'lider', 'membro')),
+  papel text not null default 'membro' check (papel in ('super', 'admin', 'lider', 'membro')),
   aprovado boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -53,6 +54,12 @@ $$;
 create or replace function meu_papel() returns text
 language sql stable security definer set search_path = public as $$
   select papel from perfis where user_id = auth.uid() and aprovado
+$$;
+
+-- chave mestre: acesso total a todas as igrejas
+create or replace function sou_super() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select papel = 'super' from perfis where user_id = auth.uid() and aprovado), false)
 $$;
 
 -- ---------- dados ----------
@@ -174,72 +181,78 @@ alter table indisponibilidades_semanais enable row level security;
 alter table escalas enable row level security;
 alter table escala_itens enable row level security;
 
+-- igrejas: usuário vê a própria; a chave mestre (super) vê todas
 create policy "ver_minha_igreja" on igrejas for select to authenticated
-  using (id = minha_igreja());
+  using (sou_super() or id = minha_igreja());
 
 create policy "ver_perfis" on perfis for select to authenticated
-  using (user_id = auth.uid() or (meu_papel() = 'admin' and igreja_id = minha_igreja()));
+  using (sou_super() or user_id = auth.uid() or (meu_papel() = 'admin' and igreja_id = minha_igreja()));
 create policy "admin_edita_perfis" on perfis for update to authenticated
-  using (meu_papel() = 'admin' and igreja_id = minha_igreja())
-  with check (igreja_id = minha_igreja());
+  using (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()))
+  with check (sou_super() or igreja_id = minha_igreja());
 create policy "admin_remove_perfis" on perfis for delete to authenticated
-  using (meu_papel() = 'admin' and igreja_id = minha_igreja() and user_id <> auth.uid());
+  using ((sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja())) and user_id <> auth.uid());
 
 create policy "ver_lideres" on lider_departamentos for select to authenticated
-  using (sou_aprovado() and exists (
+  using (sou_super() or (sou_aprovado() and exists (
     select 1 from perfis p where p.user_id = lider_departamentos.user_id and p.igreja_id = minha_igreja()
-  ));
+  )));
 create policy "admin_gerencia_lideres" on lider_departamentos for all to authenticated
-  using (meu_papel() = 'admin' and exists (
+  using (sou_super() or (meu_papel() = 'admin' and exists (
     select 1 from perfis p where p.user_id = lider_departamentos.user_id and p.igreja_id = minha_igreja()
-  ))
-  with check (meu_papel() = 'admin' and exists (
+  )))
+  with check (sou_super() or (meu_papel() = 'admin' and exists (
     select 1 from perfis p where p.user_id = lider_departamentos.user_id and p.igreja_id = minha_igreja()
-  ));
+  )));
 
--- leitura: todo membro aprovado da igreja
-create policy "le_igreja" on pessoas for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on departamentos for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on funcoes for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on membro_funcoes for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on indisponibilidades for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on indisponibilidades_semanais for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on escalas for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
-create policy "le_igreja" on escala_itens for select to authenticated using (sou_aprovado() and igreja_id = minha_igreja());
+-- leitura: todo membro aprovado da igreja; super vê todas
+create policy "le_igreja" on pessoas for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on departamentos for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on funcoes for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on membro_funcoes for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on indisponibilidades for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on indisponibilidades_semanais for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on escalas for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
+create policy "le_igreja" on escala_itens for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
 
 -- escrita
 create policy "escreve" on pessoas for all to authenticated
-  using (meu_papel() = 'admin' and igreja_id = minha_igreja())
-  with check (meu_papel() = 'admin' and igreja_id = minha_igreja());
+  using (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()))
+  with check (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()));
 create policy "escreve" on departamentos for all to authenticated
-  using (meu_papel() = 'admin' and igreja_id = minha_igreja())
-  with check (meu_papel() = 'admin' and igreja_id = minha_igreja());
+  using (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()))
+  with check (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()));
 create policy "escreve" on funcoes for all to authenticated
-  using (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento(departamento_id))))
-  with check (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento(departamento_id))));
+  using (sou_super() or (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento(departamento_id)))))
+  with check (sou_super() or (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento(departamento_id)))));
 create policy "escreve" on membro_funcoes for all to authenticated
-  using (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id)))))
-  with check (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id)))));
+  using (sou_super() or (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id))))))
+  with check (sou_super() or (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id))))));
 create policy "escreve" on indisponibilidades for all to authenticated
-  using (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'))
-  with check (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'));
+  using (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')))
+  with check (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')));
 create policy "escreve" on indisponibilidades_semanais for all to authenticated
-  using (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'))
-  with check (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'));
+  using (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')))
+  with check (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')));
 create policy "cria" on escalas for insert to authenticated
-  with check (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'));
+  with check (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')));
 create policy "edita" on escalas for update to authenticated
-  using (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'))
-  with check (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider'));
+  using (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')))
+  with check (sou_super() or (igreja_id = minha_igreja() and meu_papel() in ('admin', 'lider')));
 create policy "exclui" on escalas for delete to authenticated
-  using (igreja_id = minha_igreja() and meu_papel() = 'admin');
+  using (sou_super() or (igreja_id = minha_igreja() and meu_papel() = 'admin'));
 create policy "escreve" on escala_itens for all to authenticated
-  using (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id)))))
-  with check (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id)))));
+  using (sou_super() or (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id))))))
+  with check (sou_super() or (igreja_id = minha_igreja() and (meu_papel() = 'admin' or (meu_papel() = 'lider' and lidero_departamento((select departamento_id from funcoes f where f.id = funcao_id))))));
 
 -- ------------------------------------------------------------
--- PRIMEIRO ADMIN: cadastre-se no app com o código da igreja e rode:
+-- PRIMEIRO ADMIN de uma igreja: cadastre-se no app com o código dela e rode:
 --
 -- update perfis set papel = 'admin', aprovado = true
+-- where email = 'seu-email@exemplo.com';
+--
+-- CHAVE MESTRE (admin de TODAS as igrejas): mesma coisa, com papel 'super':
+--
+-- update perfis set papel = 'super', aprovado = true
 -- where email = 'seu-email@exemplo.com';
 -- ------------------------------------------------------------

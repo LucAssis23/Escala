@@ -20,6 +20,31 @@ function SeloEstado() {
   )
 }
 
+// Nome da igreja ativa — vira um seletor quando quem está logado é a
+// chave mestre (papel "super"), que administra todas as igrejas.
+function SeletorIgreja({ className = '' }) {
+  const { igrejas, igrejaAtivaId, definirIgrejaAtiva, permissoes } = useData()
+
+  if (!permissoes.ehSuper) {
+    const nome = permissoes.perfil?.igreja?.nome
+    return nome ? <p className={`truncate text-xs font-medium text-indigo-200 ${className}`}>{nome}</p> : null
+  }
+  if (igrejas.length === 0) return null
+  return (
+    <select
+      value={igrejaAtivaId || ''}
+      onChange={(e) => definirIgrejaAtiva(e.target.value)}
+      className={`w-full rounded-lg border border-white/25 bg-white/10 px-2 py-1.5 text-xs font-bold text-white transition-colors hover:bg-white/15 ${className}`}
+    >
+      {igrejas.map((i) => (
+        <option key={i.id} value={i.id} className="text-slate-900">
+          {i.nome}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 function Avisos() {
   const { erro, offline, acoes, temDadosLocaisParaImportar, limparErro } = useData()
   const [importando, setImportando] = useState(false)
@@ -71,10 +96,15 @@ export default function Layout({ aba, aoTrocarAba, children }) {
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-gradient-to-b from-indigo-700 via-indigo-700 to-violet-800 text-white shadow-xl lg:flex">
         <div className="px-5 pb-4 pt-6">
           <h1 className="text-xl font-extrabold tracking-tight">⛪ Escala da Igreja</h1>
-          {permissoes.perfil?.igreja?.nome && (
-            <p className="mt-1 truncate text-xs font-medium text-indigo-200">{permissoes.perfil.igreja.nome}</p>
-          )}
-          <div className="mt-2"><SeloEstado /></div>
+          <div className="mt-1.5"><SeletorIgreja /></div>
+          <div className="mt-2 flex items-center gap-1.5">
+            <SeloEstado />
+            {permissoes.ehSuper && (
+              <span className="rounded-full bg-amber-400/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-950">
+                🔑 Chave mestre
+              </span>
+            )}
+          </div>
         </div>
         <nav className="flex-1 space-y-1 px-3">
           {ABAS.map((a) => (
@@ -111,8 +141,8 @@ export default function Layout({ aba, aoTrocarAba, children }) {
       {/* ---- conteúdo ---- */}
       <div className="min-h-screen flex-1 pb-24 lg:pb-8 lg:pl-64">
         <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-600 to-violet-600 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white shadow-md lg:hidden">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-extrabold tracking-tight">⛪ Escala da Igreja</h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="shrink-0 text-lg font-extrabold tracking-tight">⛪ Escala da Igreja</h1>
             <div className="flex items-center gap-2">
               <SeloEstado />
               {usuario && sair && (
@@ -126,6 +156,14 @@ export default function Layout({ aba, aoTrocarAba, children }) {
               )}
             </div>
           </div>
+          {permissoes.ehSuper && (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="shrink-0 rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-950">
+                🔑 Mestre
+              </span>
+              <SeletorIgreja className="flex-1" />
+            </div>
+          )}
         </header>
 
         <div className="mx-auto max-w-2xl lg:max-w-5xl">
