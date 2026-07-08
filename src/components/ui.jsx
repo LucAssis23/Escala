@@ -1,16 +1,17 @@
 // Componentes visuais reutilizáveis.
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 export function Botao({ children, variante = 'primario', className = '', ...props }) {
   const estilos = {
-    primario: 'bg-indigo-600 text-white active:bg-indigo-700 disabled:bg-indigo-300',
-    secundario: 'bg-white text-slate-700 border border-slate-300 active:bg-slate-50',
-    perigo: 'bg-red-600 text-white active:bg-red-700',
-    verde: 'bg-emerald-600 text-white active:bg-emerald-700',
+    primario: 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-indigo-300 disabled:shadow-none',
+    secundario: 'bg-white text-slate-700 border border-slate-300 hover:border-slate-400 active:bg-slate-50',
+    perigo: 'bg-red-600 text-white hover:bg-red-500 active:bg-red-700',
+    verde: 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30 hover:bg-emerald-500 active:bg-emerald-700',
   }
   return (
     <button
-      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${estilos[variante]} ${className}`}
+      className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-all active:scale-[0.98] ${estilos[variante]} ${className}`}
       {...props}
     >
       {children}
@@ -39,10 +40,12 @@ export function Modal({ titulo, aberto, onFechar, children }) {
   }, [aberto, onFechar])
 
   if (!aberto) return null
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onFechar}>
+  // portal: garante que o modal fique acima de tudo, fora de qualquer
+  // stacking context criado por animações nas páginas
+  return createPortal(
+    <div className="anim-fade-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] sm:items-center" onClick={onFechar}>
       <div
-        className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-2xl"
+        className="anim-slide-up max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-lg sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -55,12 +58,30 @@ export function Modal({ titulo, aberto, onFechar, children }) {
         </div>
         {children}
       </div>
+    </div>,
+    document.body
+  )
+}
+
+export function Vazio({ icone = '🗒️', children }) {
+  return (
+    <div className="anim-fade-in rounded-3xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+      <div className="mb-2 text-4xl">{icone}</div>
+      {children}
     </div>
   )
 }
 
-export function Vazio({ children }) {
-  return <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">{children}</div>
+// Placeholder de carregamento (skeleton) — usado enquanto os dados chegam.
+export function Skeleton() {
+  return (
+    <div className="anim-shimmer space-y-3 p-4" aria-label="Carregando">
+      <div className="h-10 w-2/3 rounded-2xl bg-slate-200" />
+      <div className="h-24 rounded-2xl bg-slate-200" />
+      <div className="h-24 rounded-2xl bg-slate-200" />
+      <div className="h-24 rounded-2xl bg-slate-200" />
+    </div>
+  )
 }
 
 export function BadgeDepartamento({ dep, className = '' }) {
@@ -77,10 +98,11 @@ export function BadgeDepartamento({ dep, className = '' }) {
 
 export function Toast({ mensagem }) {
   if (!mensagem) return null
-  return (
-    <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
+  return createPortal(
+    <div className="anim-slide-up pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
       {mensagem}
-    </div>
+    </div>,
+    document.body
   )
 }
 

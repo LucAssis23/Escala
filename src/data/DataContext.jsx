@@ -12,6 +12,9 @@ const VAZIO = {
   indisponibilidades_semanais: [],
   escalas: [],
   escala_itens: [],
+  perfis: [],
+  lider_departamentos: [],
+  perfil: null,
 }
 
 export function DataProvider({ children }) {
@@ -64,14 +67,16 @@ export function DataProvider({ children }) {
       'createPessoa', 'updatePessoa', 'deletePessoa',
       'createDepartamento', 'updateDepartamento', 'deleteDepartamento',
       'createFuncao', 'updateFuncao', 'deleteFuncao',
-      'setMembroFuncoes',
+      'addMembroFuncao', 'removeMembroFuncao',
       'addIndisponibilidade', 'removeIndisponibilidade',
       'addIndisponibilidadeSemanal', 'removeIndisponibilidadeSemanal',
       'createEscala', 'updateEscala', 'deleteEscala',
       'addEscalaItem', 'removeEscalaItem', 'setEscalaItemPessoa', 'setEscalaItensPessoas',
+      'updatePerfil', 'deletePerfil', 'setLiderDepartamentos',
     ]
     const obj = {}
     for (const nome of nomes) {
+      if (typeof repo[nome] !== 'function') continue
       obj[nome] = async (...args) => {
         try {
           const r = await repo[nome](...args)
@@ -112,17 +117,50 @@ export function DataProvider({ children }) {
     }
   }, [db, offline])
 
+  // Permissões derivadas do perfil: admin tudo; líder edita apenas os
+  // departamentos que lidera; membro é somente leitura.
+  const permissoes = useMemo(() => {
+    const perfil = db.perfil
+    const papel = perfil?.papel || null
+    const ehAdmin = papel === 'admin'
+    const ehLider = papel === 'lider'
+    const liderados = new Set(
+      (db.lider_departamentos || [])
+        .filter((l) => l.user_id === perfil?.user_id)
+        .map((l) => l.departamento_id)
+    )
+    const podeEditarDepartamento = (depId) => ehAdmin || (ehLider && liderados.has(depId))
+    const podeEditarFuncao = (funcaoId) => {
+      if (ehAdmin) return true
+      const f = db.funcoes.find((x) => x.id === funcaoId)
+      return f ? podeEditarDepartamento(f.departamento_id) : false
+    }
+    // null = todas (admin); Set = apenas estas (líder); Set vazio = nenhuma (membro)
+    const funcoesPermitidas = ehAdmin
+      ? null
+      : new Set(db.funcoes.filter((f) => podeEditarDepartamento(f.departamento_id)).map((f) => f.id))
+    return {
+      perfil, papel, ehAdmin, ehLider,
+      somenteLeitura: !ehAdmin && !ehLider,
+      podeGerenciarEscalas: ehAdmin || ehLider,
+      departamentosLiderados: liderados,
+      podeEditarDepartamento, podeEditarFuncao, funcoesPermitidas,
+    }
+  }, [db])
+
   const valor = useMemo(
     () => ({
-      db, carregando, erro, offline, acoes,
+      db, carregando, erro, offline, acoes, permissoes,
       backend: repo.nome,
       temDadosLocaisParaImportar,
       requerLogin, authPronto, usuario,
       entrar: repo.auth ? repo.auth.signIn : null,
+      cadastrar: repo.auth ? repo.auth.signUp : null,
       sair: repo.auth ? repo.auth.signOut : null,
+      recarregar,
       limparErro: () => setErro(null),
     }),
-    [db, carregando, erro, offline, acoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario]
+    [db, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, recarregar]
   )
 
   return <DataContext.Provider value={valor}>{children}</DataContext.Provider>

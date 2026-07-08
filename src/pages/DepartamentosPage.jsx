@@ -3,7 +3,7 @@ import { useData } from '../data/DataContext'
 import { Botao, Campo, Modal, Vazio, estiloInput, CORES_DEPARTAMENTO } from '../components/ui'
 
 export default function DepartamentosPage() {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   const [editando, setEditando] = useState(null) // null | {} | { dep }
   const [novaFuncao, setNovaFuncao] = useState({}) // depId -> texto
 
@@ -16,27 +16,33 @@ export default function DepartamentosPage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <Botao onClick={() => setEditando({})}>+ Novo departamento</Botao>
-      </div>
+      {permissoes.ehAdmin && (
+        <div className="flex justify-end">
+          <Botao onClick={() => setEditando({})}>+ Novo departamento</Botao>
+        </div>
+      )}
 
       {db.departamentos.length === 0 && (
-        <Vazio>
+        <Vazio icone="🎯">
           Nenhum departamento ainda.
           <br />
           Ex.: Louvor, Mídia, Recepção, Infantil…
         </Vazio>
       )}
 
+      <div className="grid gap-3 sm:grid-cols-2">
       {db.departamentos.map((dep) => {
         const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
+        const podeEditar = permissoes.podeEditarDepartamento(dep.id)
         return (
           <div key={dep.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
             <div className="flex items-center justify-between px-3 py-2.5 text-white" style={{ backgroundColor: dep.cor }}>
               <span className="font-bold">{dep.nome}</span>
-              <button className="rounded-lg bg-white/20 px-2.5 py-1 text-xs font-semibold" onClick={() => setEditando({ dep })}>
-                Editar
-              </button>
+              {permissoes.ehAdmin && (
+                <button className="rounded-lg bg-white/20 px-2.5 py-1 text-xs font-semibold" onClick={() => setEditando({ dep })}>
+                  Editar
+                </button>
+              )}
             </div>
             <div className="space-y-2 p-3">
               {funcoes.length === 0 && <p className="text-sm text-slate-400">Nenhuma função. Ex.: violão, baixo, vocal…</p>}
@@ -48,38 +54,43 @@ export default function DepartamentosPage() {
                       <span className="text-slate-400">
                         {db.membro_funcoes.filter((mf) => mf.funcao_id === f.id).length} pessoa(s)
                       </span>
-                      <button
-                        className="text-red-500"
-                        onClick={() => {
-                          if (confirm(`Excluir a função "${f.nome}"? Vínculos e itens de escala dela serão removidos.`))
-                            acoes.deleteFuncao(f.id)
-                        }}
-                      >
-                        Excluir
-                      </button>
+                      {podeEditar && (
+                        <button
+                          className="text-red-500"
+                          onClick={() => {
+                            if (confirm(`Excluir a função "${f.nome}"? Vínculos e itens de escala dela serão removidos.`))
+                              acoes.deleteFuncao(f.id)
+                          }}
+                        >
+                          Excluir
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  adicionarFuncao(dep.id)
-                }}
-              >
-                <input
-                  className={estiloInput}
-                  placeholder="Nova função…"
-                  value={novaFuncao[dep.id] || ''}
-                  onChange={(e) => setNovaFuncao((s) => ({ ...s, [dep.id]: e.target.value }))}
-                />
-                <Botao type="submit" variante="secundario" className="shrink-0">+</Botao>
-              </form>
+              {podeEditar && (
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    adicionarFuncao(dep.id)
+                  }}
+                >
+                  <input
+                    className={estiloInput}
+                    placeholder="Nova função…"
+                    value={novaFuncao[dep.id] || ''}
+                    onChange={(e) => setNovaFuncao((s) => ({ ...s, [dep.id]: e.target.value }))}
+                  />
+                  <Botao type="submit" variante="secundario" className="shrink-0">+</Botao>
+                </form>
+              )}
             </div>
           </div>
         )
       })}
+      </div>
 
       {editando && (
         <ModalDepartamento

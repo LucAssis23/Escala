@@ -2,13 +2,17 @@ import { useMemo, useState } from 'react'
 import { useData } from '../data/DataContext'
 import { Botao, Campo, Modal, Vazio, estiloInput } from '../components/ui'
 import { DIAS_SEMANA_CHIPS, formatarDataBR, hojeISO } from '../lib/datas'
+import EquipeModal from './EquipeModal'
 
 export default function PessoasPage() {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes, backend } = useData()
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState(null) // null | { pessoa? } (sem pessoa = nova)
   const [vinculando, setVinculando] = useState(null) // pessoa
   const [indisp, setIndisp] = useState(null) // pessoa
+  const [equipeAberta, setEquipeAberta] = useState(false)
+
+  const pendentes = db.perfis.filter((p) => !p.aprovado).length
 
   const pessoas = useMemo(
     () =>
@@ -26,6 +30,22 @@ export default function PessoasPage() {
 
   return (
     <div className="space-y-3">
+      {permissoes.ehAdmin && backend === 'supabase' && (
+        <button
+          onClick={() => setEquipeAberta(true)}
+          className="flex w-full items-center justify-between rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition-all active:scale-[0.99]"
+        >
+          <span>👤 Equipe & acessos</span>
+          {pendentes > 0 ? (
+            <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-bold text-amber-900">
+              {pendentes} aguardando
+            </span>
+          ) : (
+            <span className="text-indigo-400">›</span>
+          )}
+        </button>
+      )}
+
       <div className="flex gap-2">
         <input
           className={estiloInput}
@@ -33,12 +53,16 @@ export default function PessoasPage() {
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        <Botao onClick={() => setEditando({})} className="shrink-0">+ Nova</Botao>
+        {permissoes.ehAdmin && (
+          <Botao onClick={() => setEditando({})} className="shrink-0">+ Nova</Botao>
+        )}
       </div>
 
-      {pessoas.length === 0 && <Vazio>Nenhuma pessoa cadastrada ainda. Toque em “+ Nova”.</Vazio>}
+      {pessoas.length === 0 && (
+        <Vazio icone="👥">Nenhuma pessoa cadastrada ainda{permissoes.ehAdmin ? '. Toque em "+ Nova".' : '.'}</Vazio>
+      )}
 
-      <ul className="space-y-2">
+      <ul className="grid gap-2 sm:grid-cols-2">
         {pessoas.map((p) => {
           const fns = funcoesDe(p.id)
           const nIndisp =
@@ -54,9 +78,11 @@ export default function PessoasPage() {
                   </div>
                   {p.telefone && <div className="text-xs text-slate-500">{p.telefone}</div>}
                 </div>
-                <button className="text-sm font-semibold text-indigo-600" onClick={() => setEditando({ pessoa: p })}>
-                  Editar
-                </button>
+                {permissoes.ehAdmin && (
+                  <button className="text-sm font-semibold text-indigo-600" onClick={() => setEditando({ pessoa: p })}>
+                    Editar
+                  </button>
+                )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {fns.map((f) => {
@@ -69,12 +95,14 @@ export default function PessoasPage() {
                 })}
                 {fns.length === 0 && <span className="text-xs text-slate-400">Sem funções vinculadas</span>}
               </div>
-              <div className="mt-2 flex gap-4 text-xs font-semibold">
-                <button className="text-indigo-600" onClick={() => setVinculando(p)}>🔗 Funções</button>
-                <button className="text-amber-600" onClick={() => setIndisp(p)}>
-                  🚫 Indisponibilidades{nIndisp > 0 && ` (${nIndisp})`}
-                </button>
-              </div>
+              {permissoes.podeGerenciarEscalas && (
+                <div className="mt-2 flex gap-4 text-xs font-semibold">
+                  <button className="text-indigo-600" onClick={() => setVinculando(p)}>🔗 Funções</button>
+                  <button className="text-amber-600" onClick={() => setIndisp(p)}>
+                    🚫 Indisponibilidades{nIndisp > 0 && ` (${nIndisp})`}
+                  </button>
+                </div>
+              )}
             </li>
           )
         })}
@@ -103,6 +131,7 @@ export default function PessoasPage() {
 
       {vinculando && <ModalFuncoes pessoa={vinculando} onFechar={() => setVinculando(null)} />}
       {indisp && <ModalIndisponibilidades pessoa={indisp} onFechar={() => setIndisp(null)} />}
+      {equipeAberta && <EquipeModal onFechar={() => setEquipeAberta(false)} />}
     </div>
   )
 }
@@ -141,8 +170,9 @@ function ModalPessoa({ pessoa, onFechar, onSalvar, onExcluir }) {
 }
 
 // Vincular pessoa ↔ funções: checkboxes agrupados por departamento.
+// Líder só vê (e altera) as funções dos departamentos que lidera.
 function ModalFuncoes({ pessoa, onFechar }) {
-  const { db, acoes } = useData()
+  const { db, acoes, permissoes } = useData()
   const [selecionadas, setSelecionadas] = useState(
     () => new Set(db.membro_funcoes.filter((mf) => mf.pessoa_id === pessoa.id).map((mf) => mf.funcao_id))
   )
@@ -153,13 +183,29 @@ function ModalFuncoes({ pessoa, onFechar }) {
     setSelecionadas(s)
   }
 
+  const departamentosVisiveis = db.departamentos.filter((dep) => permissoes.podeEditarDepartamento(dep.id))
+
+  const salvar = async () => {
+    // aplica só as diferenças, e só nas funções que este usuário pode editar
+    const originais = new Set(
+      db.membro_funcoes.filter((mf) => mf.pessoa_id === pessoa.id).map((mf) => mf.funcao_id)
+    )
+    for (const id of selecionadas) {
+      if (!originais.has(id) && permissoes.podeEditarFuncao(id)) await acoes.addMembroFuncao(pessoa.id, id)
+    }
+    for (const id of originais) {
+      if (!selecionadas.has(id) && permissoes.podeEditarFuncao(id)) await acoes.removeMembroFuncao(pessoa.id, id)
+    }
+    onFechar()
+  }
+
   return (
     <Modal titulo={`Funções de ${pessoa.nome}`} aberto onFechar={onFechar}>
       <div className="space-y-4">
-        {db.departamentos.length === 0 && (
+        {departamentosVisiveis.length === 0 && (
           <p className="text-sm text-slate-500">Cadastre departamentos e funções primeiro (aba “Deptos”).</p>
         )}
-        {db.departamentos.map((dep) => {
+        {departamentosVisiveis.map((dep) => {
           const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
           if (funcoes.length === 0) return null
           return (
@@ -189,13 +235,7 @@ function ModalFuncoes({ pessoa, onFechar }) {
             </div>
           )
         })}
-        <Botao
-          className="w-full"
-          onClick={async () => {
-            await acoes.setMembroFuncoes(pessoa.id, [...selecionadas])
-            onFechar()
-          }}
-        >
+        <Botao className="w-full" onClick={salvar}>
           Salvar funções
         </Botao>
       </div>
