@@ -19,6 +19,8 @@ export default function EquipeModal({ onFechar }) {
   return (
     <Modal titulo="Equipe & acessos" aberto onFechar={onFechar}>
       <div className="space-y-4">
+        <GuiaHierarquia />
+
         {db.perfis.length <= 1 && (
           <p className="text-sm text-slate-500">
             Quando alguém criar conta com o código da sua igreja, o cadastro aparece aqui para você aprovar.
@@ -69,6 +71,43 @@ export default function EquipeModal({ onFechar }) {
         </div>
       </div>
     </Modal>
+  )
+}
+
+const PAPEIS_GUIA = [
+  { emoji: '🔑', nome: 'Super (chave mestre)', desc: 'Admin de todas as igrejas — só quem administra o sistema todo.' },
+  { emoji: '👨‍💼', nome: 'Administrador', desc: 'Gerencia tudo na própria igreja: pessoas, departamentos, escalas e aprova cadastros.' },
+  { emoji: '👥', nome: 'Líder de departamento', desc: 'Cria e edita escalas; só mexe nas funções dos departamentos que lidera.' },
+  { emoji: '👤', nome: 'Membro', desc: 'Só visualiza — escalas, pessoas e departamentos. Não pode editar nada.' },
+]
+
+// Guia rápido para quem está atribuindo papéis não errar a mão.
+function GuiaHierarquia() {
+  const [aberto, setAberto] = useState(false)
+  return (
+    <div className="overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50/60">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-semibold text-indigo-700"
+        onClick={() => setAberto(!aberto)}
+      >
+        <span>📚 Como funciona a hierarquia</span>
+        <span className="text-indigo-400">{aberto ? '▲' : '▼'}</span>
+      </button>
+      {aberto && (
+        <div className="space-y-2.5 px-3 pb-3">
+          {PAPEIS_GUIA.map((p) => (
+            <div key={p.nome} className="flex gap-2">
+              <span className="text-lg leading-none">{p.emoji}</span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-800">{p.nome}</div>
+                <div className="text-xs text-slate-500">{p.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
