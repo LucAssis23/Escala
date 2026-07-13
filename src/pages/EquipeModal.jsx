@@ -77,7 +77,7 @@ export default function EquipeModal({ onFechar }) {
 const PAPEIS_GUIA = [
   { emoji: '🔑', nome: 'Super (chave mestre)', desc: 'Admin de todas as igrejas — só quem administra o sistema todo.' },
   { emoji: '👨‍💼', nome: 'Administrador', desc: 'Gerencia tudo na própria igreja: pessoas, departamentos, escalas e aprova cadastros.' },
-  { emoji: '👥', nome: 'Líder de departamento', desc: 'Cria escalas, funções e pessoas; só mexe (e só enxerga na aba Deptos) nos departamentos que lidera.' },
+  { emoji: '👥', nome: 'Líder de departamento', desc: 'Cria e gerencia escalas, funções e pessoas; só mexe (e só enxerga na aba Deptos) nos departamentos que lidera.' },
   { emoji: '👤', nome: 'Membro', desc: 'Só visualiza — escalas, pessoas e departamentos. Não pode editar nada.' },
 ]
 

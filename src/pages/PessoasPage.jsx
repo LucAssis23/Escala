@@ -119,7 +119,6 @@ export default function PessoasPage() {
           }}
           onExcluir={
             editando.pessoa &&
-            permissoes.ehAdmin &&
             (async () => {
               if (confirm(`Excluir ${editando.pessoa.nome}? As escalas em que ela aparece ficarão com a vaga em aberto.`)) {
                 await acoes.deletePessoa(editando.pessoa.id)

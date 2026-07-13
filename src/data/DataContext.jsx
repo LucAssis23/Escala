@@ -213,13 +213,20 @@ export function DataProvider({ children }) {
     }
   }, [dbView])
 
+  // Nome da igreja em operação: para a chave mestre é a escolhida no
+  // seletor (não a do próprio perfil) — usado em imagens e cabeçalhos.
+  const igrejaAtivaNome =
+    (ehSuper && db.igrejas.find((i) => i.id === igrejaAtivaId)?.nome) ||
+    db.perfil?.igreja?.nome ||
+    null
+
   const valor = useMemo(
     () => ({
       db: dbView, carregando, erro, offline, acoes, permissoes,
       backend: repo.nome,
       temDadosLocaisParaImportar,
       requerLogin, authPronto, usuario,
-      igrejas: db.igrejas, igrejaAtivaId, definirIgrejaAtiva,
+      igrejas: db.igrejas, igrejaAtivaId, definirIgrejaAtiva, igrejaAtivaNome,
       entrar: repo.auth ? repo.auth.signIn : null,
       cadastrar: repo.auth ? repo.auth.signUp : null,
       sair: repo.auth ? repo.auth.signOut : null,
@@ -230,7 +237,7 @@ export function DataProvider({ children }) {
       recarregar,
       limparErro: () => setErro(null),
     }),
-    [dbView, db.igrejas, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, igrejaAtivaId, definirIgrejaAtiva, recarregar, recuperandoSenha]
+    [dbView, db.igrejas, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, igrejaAtivaId, definirIgrejaAtiva, igrejaAtivaNome, recarregar, recuperandoSenha]
   )
 
   return <DataContext.Provider value={valor}>{children}</DataContext.Provider>

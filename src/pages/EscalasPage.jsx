@@ -314,7 +314,7 @@ function ModalNovaEscala({ onFechar, onCriada }) {
 
 // Detalhe: preenchimento manual, sorteio, acúmulo, WhatsApp.
 function EscalaDetalhe({ escala, onVoltar }) {
-  const { db, acoes, permissoes } = useData()
+  const { db, acoes, permissoes, igrejaAtivaNome } = useData()
   const [permitirAcumulo, setPermitirAcumulo] = useState(false)
   const [toast, setToast] = useState('')
   const [editandoCabecalho, setEditandoCabecalho] = useState(false)
@@ -368,7 +368,7 @@ function EscalaDetalhe({ escala, onVoltar }) {
   const baixarImagem = async () => {
     setGerandoImagem(true)
     try {
-      const blob = await gerarImagemEscala({ escala, itens, db, nomeIgreja: permissoes.perfil?.igreja?.nome })
+      const blob = await gerarImagemEscala({ escala, itens, db, nomeIgreja: igrejaAtivaNome })
       const nomeArquivo = `escala-${escala.data}.png`
       const resultado = await compartilharOuBaixarImagem(blob, nomeArquivo)
       if (resultado === 'baixado') avisar('🖼️ Imagem baixada!')

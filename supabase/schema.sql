@@ -216,14 +216,14 @@ create policy "le_igreja" on escalas for select to authenticated using (sou_supe
 create policy "le_igreja" on escala_itens for select to authenticated using (sou_super() or (sou_aprovado() and igreja_id = minha_igreja()));
 
 -- escrita
--- pessoas: admin e líder criam/editam; excluir é só do admin
+-- pessoas: admin e líder criam, editam e excluem
 create policy "insere_edita" on pessoas for insert to authenticated
   with check (sou_super() or (meu_papel() in ('admin','lider') and igreja_id = minha_igreja()));
 create policy "atualiza" on pessoas for update to authenticated
   using (sou_super() or (meu_papel() in ('admin','lider') and igreja_id = minha_igreja()))
   with check (sou_super() or (meu_papel() in ('admin','lider') and igreja_id = minha_igreja()));
 create policy "exclui" on pessoas for delete to authenticated
-  using (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()));
+  using (sou_super() or (meu_papel() in ('admin','lider') and igreja_id = minha_igreja()));
 create policy "escreve" on departamentos for all to authenticated
   using (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()))
   with check (sou_super() or (meu_papel() = 'admin' and igreja_id = minha_igreja()));
