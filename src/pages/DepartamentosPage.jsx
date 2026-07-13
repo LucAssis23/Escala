@@ -14,6 +14,11 @@ export default function DepartamentosPage() {
     setNovaFuncao((s) => ({ ...s, [depId]: '' }))
   }
 
+  // Líder só enxerga os departamentos que lidera; admin e membro veem todos.
+  const departamentosVisiveis = permissoes.ehLider
+    ? db.departamentos.filter((d) => permissoes.podeEditarDepartamento(d.id))
+    : db.departamentos
+
   return (
     <div className="space-y-3">
       {permissoes.ehAdmin && (
@@ -22,16 +27,22 @@ export default function DepartamentosPage() {
         </div>
       )}
 
-      {db.departamentos.length === 0 && (
+      {departamentosVisiveis.length === 0 && (
         <Vazio icone="🎯">
-          Nenhum departamento ainda.
-          <br />
-          Ex.: Louvor, Mídia, Recepção, Infantil…
+          {permissoes.ehLider ? (
+            <>Você ainda não lidera nenhum departamento. Peça ao administrador para te vincular.</>
+          ) : (
+            <>
+              Nenhum departamento ainda.
+              <br />
+              Ex.: Louvor, Mídia, Recepção, Infantil…
+            </>
+          )}
         </Vazio>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-      {db.departamentos.map((dep) => {
+      {departamentosVisiveis.map((dep) => {
         const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
         const podeEditar = permissoes.podeEditarDepartamento(dep.id)
         return (

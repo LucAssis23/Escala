@@ -53,13 +53,13 @@ export default function PessoasPage() {
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        {permissoes.ehAdmin && (
+        {permissoes.podeGerenciarEscalas && (
           <Botao onClick={() => setEditando({})} className="shrink-0">+ Nova</Botao>
         )}
       </div>
 
       {pessoas.length === 0 && (
-        <Vazio icone="👥">Nenhuma pessoa cadastrada ainda{permissoes.ehAdmin ? '. Toque em "+ Nova".' : '.'}</Vazio>
+        <Vazio icone="👥">Nenhuma pessoa cadastrada ainda{permissoes.podeGerenciarEscalas ? '. Toque em "+ Nova".' : '.'}</Vazio>
       )}
 
       <ul className="grid gap-2 sm:grid-cols-2">
@@ -78,7 +78,7 @@ export default function PessoasPage() {
                   </div>
                   {p.telefone && <div className="text-xs text-slate-500">{p.telefone}</div>}
                 </div>
-                {permissoes.ehAdmin && (
+                {permissoes.podeGerenciarEscalas && (
                   <button className="text-sm font-semibold text-indigo-600" onClick={() => setEditando({ pessoa: p })}>
                     Editar
                   </button>
@@ -119,6 +119,7 @@ export default function PessoasPage() {
           }}
           onExcluir={
             editando.pessoa &&
+            permissoes.ehAdmin &&
             (async () => {
               if (confirm(`Excluir ${editando.pessoa.nome}? As escalas em que ela aparece ficarão com a vaga em aberto.`)) {
                 await acoes.deletePessoa(editando.pessoa.id)
