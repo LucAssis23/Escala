@@ -3,6 +3,7 @@ import { useData } from './data/DataContext'
 import Layout from './components/Layout'
 import { Skeleton } from './components/ui'
 import LoginPage from './pages/LoginPage'
+import NovaSenhaPage from './pages/NovaSenhaPage'
 import EscalasPage from './pages/EscalasPage'
 import CalendarioPage from './pages/CalendarioPage'
 import PessoasPage from './pages/PessoasPage'
@@ -10,7 +11,7 @@ import DepartamentosPage from './pages/DepartamentosPage'
 import CargaPage from './pages/CargaPage'
 
 export default function App() {
-  const { carregando, requerLogin, authPronto, usuario, db } = useData()
+  const { carregando, requerLogin, authPronto, usuario, db, recuperandoSenha } = useData()
   const [aba, setAba] = useState('escalas')
   // escala aberta na tela de detalhe (compartilhada entre Escalas e Agenda)
   const [escalaAbertaId, setEscalaAbertaId] = useState(null)
@@ -20,6 +21,10 @@ export default function App() {
     setAba('escalas')
   }
 
+  // Chegou pelo link "redefinir senha" do e-mail
+  if (requerLogin && recuperandoSenha) {
+    return <NovaSenhaPage />
+  }
   if (requerLogin && !usuario) {
     return authPronto ? <LoginPage /> : <Carregando />
   }

@@ -30,6 +30,8 @@ export function DataProvider({ children }) {
   const requerLogin = !!repo.auth
   const [usuario, setUsuario] = useState(null)
   const [authPronto, setAuthPronto] = useState(!requerLogin)
+  // true enquanto o usuário chegou pelo link "redefinir senha" do e-mail
+  const [recuperandoSenha, setRecuperandoSenha] = useState(false)
 
   const recarregar = useCallback(async () => {
     try {
@@ -53,7 +55,10 @@ export function DataProvider({ children }) {
         setAuthPronto(true)
       }
     })
-    const parar = repo.auth.onChange((u) => setUsuario(u))
+    const parar = repo.auth.onChange((u, evento) => {
+      setUsuario(u)
+      if (evento === 'PASSWORD_RECOVERY') setRecuperandoSenha(true)
+    })
     return () => {
       ativo = false
       parar?.()
@@ -218,10 +223,14 @@ export function DataProvider({ children }) {
       entrar: repo.auth ? repo.auth.signIn : null,
       cadastrar: repo.auth ? repo.auth.signUp : null,
       sair: repo.auth ? repo.auth.signOut : null,
+      resetSenha: repo.auth?.resetSenha || null,
+      novaSenha: repo.auth?.novaSenha || null,
+      recuperandoSenha,
+      terminarRecuperacao: () => setRecuperandoSenha(false),
       recarregar,
       limparErro: () => setErro(null),
     }),
-    [dbView, db.igrejas, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, igrejaAtivaId, definirIgrejaAtiva, recarregar]
+    [dbView, db.igrejas, carregando, erro, offline, acoes, permissoes, temDadosLocaisParaImportar, requerLogin, authPronto, usuario, igrejaAtivaId, definirIgrejaAtiva, recarregar, recuperandoSenha]
   )
 
   return <DataContext.Provider value={valor}>{children}</DataContext.Provider>
