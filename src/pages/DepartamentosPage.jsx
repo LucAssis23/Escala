@@ -14,6 +14,11 @@ export default function DepartamentosPage() {
     setNovaFuncao((s) => ({ ...s, [depId]: '' }))
   }
 
+  // Líder só enxerga os departamentos que lidera; admin e membro veem todos.
+  const departamentosVisiveis = permissoes.ehLider
+    ? db.departamentos.filter((d) => permissoes.podeEditarDepartamento(d.id))
+    : db.departamentos
+
   return (
     <div className="space-y-3">
       {permissoes.ehAdmin && (
@@ -22,18 +27,29 @@ export default function DepartamentosPage() {
         </div>
       )}
 
-      {db.departamentos.length === 0 && (
+      {departamentosVisiveis.length === 0 && (
         <Vazio icone="🎯">
-          Nenhum departamento ainda.
-          <br />
-          Ex.: Louvor, Mídia, Recepção, Infantil…
+          {permissoes.ehLider ? (
+            <>Você ainda não lidera nenhum departamento. Peça ao administrador para te vincular.</>
+          ) : (
+            <>
+              Nenhum departamento ainda.
+              <br />
+              Ex.: Louvor, Mídia, Recepção, Infantil…
+            </>
+          )}
         </Vazio>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-      {db.departamentos.map((dep) => {
+      {departamentosVisiveis.map((dep) => {
         const funcoes = db.funcoes.filter((f) => f.departamento_id === dep.id)
         const podeEditar = permissoes.podeEditarDepartamento(dep.id)
+        // nomes dependem da RLS de perfis: admin vê todos; líder vê o próprio
+        const lideres = db.lider_departamentos
+          .filter((l) => l.departamento_id === dep.id)
+          .map((l) => db.perfis.find((p) => p.user_id === l.user_id)?.nome)
+          .filter(Boolean)
         return (
           <div key={dep.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
             <div className="flex items-center justify-between px-3 py-2.5 text-white" style={{ backgroundColor: dep.cor }}>
@@ -45,6 +61,9 @@ export default function DepartamentosPage() {
               )}
             </div>
             <div className="space-y-2 p-3">
+              {lideres.length > 0 && (
+                <p className="text-xs font-semibold text-slate-500">👥 Líder: {lideres.join(', ')}</p>
+              )}
               {funcoes.length === 0 && <p className="text-sm text-slate-400">Nenhuma função. Ex.: violão, baixo, vocal…</p>}
               <ul className="space-y-1.5">
                 {funcoes.map((f) => (
