@@ -119,8 +119,30 @@ export function criarSupabaseRepo(url, anonKey) {
         }
         return data.user
       },
+      // Envia o e-mail com o link de redefinição; o link volta para o app.
+      async resetSenha(email) {
+        const { error } = await sb.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + import.meta.env.BASE_URL,
+        })
+        if (error) {
+          throw new Error(
+            /rate limit/i.test(error.message)
+              ? 'Muitas tentativas — aguarde alguns minutos e tente de novo.'
+              : error.message
+          )
+        }
+      },
+      // Troca a senha do usuário da sessão de recuperação (link do e-mail).
+      async novaSenha(senha) {
+        const { error } = await sb.auth.updateUser({ password: senha })
+        if (error) {
+          if (/at least 6|password.*short/i.test(error.message)) throw new Error('A senha precisa ter pelo menos 6 caracteres.')
+          if (/different from the old/i.test(error.message)) throw new Error('A nova senha precisa ser diferente da antiga.')
+          throw new Error(error.message)
+        }
+      },
       onChange(cb) {
-        const { data } = sb.auth.onAuthStateChange((_evento, sessao) => cb(sessao?.user ?? null))
+        const { data } = sb.auth.onAuthStateChange((evento, sessao) => cb(sessao?.user ?? null, evento))
         return () => data.subscription.unsubscribe()
       },
     },

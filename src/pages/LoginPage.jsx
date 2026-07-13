@@ -5,18 +5,20 @@ import { Botao, Campo, estiloInput } from '../components/ui'
 // Entrar ou criar conta (modo Supabase). O cadastro usa o código de convite
 // da igreja e a conta fica aguardando aprovação de um líder.
 export default function LoginPage() {
-  const { entrar, cadastrar } = useData()
-  const [modo, setModo] = useState('entrar') // 'entrar' | 'cadastrar'
+  const { entrar, cadastrar, resetSenha } = useData()
+  const [modo, setModo] = useState('entrar') // 'entrar' | 'cadastrar' | 'recuperar'
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [codigo, setCodigo] = useState('')
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [emailEnviado, setEmailEnviado] = useState(false)
 
   const trocarModo = (novo) => {
     setModo(novo)
     setErro('')
+    setEmailEnviado(false)
   }
 
   const enviar = async (e) => {
@@ -27,6 +29,9 @@ export default function LoginPage() {
     try {
       if (modo === 'entrar') {
         await entrar(email.trim(), senha)
+      } else if (modo === 'recuperar') {
+        await resetSenha(email.trim())
+        setEmailEnviado(true)
       } else {
         await cadastrar(nome.trim(), email.trim(), senha, codigo)
         // sucesso: o App detecta o usuário logado sem aprovação e
@@ -46,28 +51,32 @@ export default function LoginPage() {
           <div className="text-4xl">⛪</div>
           <h1 className="mt-2 text-xl font-extrabold tracking-tight text-slate-800">Escala da Igreja</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {modo === 'entrar' ? 'Entre com o acesso da sua equipe' : 'Crie sua conta com o código da sua igreja'}
+            {modo === 'entrar' && 'Entre com o acesso da sua equipe'}
+            {modo === 'cadastrar' && 'Crie sua conta com o código da sua igreja'}
+            {modo === 'recuperar' && 'Enviaremos um link para você criar uma senha nova'}
           </p>
         </div>
 
-        {/* abas Entrar / Criar conta */}
-        <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
-          {[
-            { id: 'entrar', rotulo: 'Entrar' },
-            { id: 'cadastrar', rotulo: 'Criar conta' },
-          ].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => trocarModo(t.id)}
-              className={`rounded-xl py-2 text-sm font-semibold transition-all ${
-                modo === t.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
-              }`}
-            >
-              {t.rotulo}
-            </button>
-          ))}
-        </div>
+        {/* abas Entrar / Criar conta (ocultas na recuperação de senha) */}
+        {modo !== 'recuperar' && (
+          <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1">
+            {[
+              { id: 'entrar', rotulo: 'Entrar' },
+              { id: 'cadastrar', rotulo: 'Criar conta' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => trocarModo(t.id)}
+                className={`rounded-xl py-2 text-sm font-semibold transition-all ${
+                  modo === t.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
+                }`}
+              >
+                {t.rotulo}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form key={modo} className="anim-fade-in space-y-3" onSubmit={enviar}>
           {modo === 'cadastrar' && (
@@ -93,18 +102,20 @@ export default function LoginPage() {
               required
             />
           </Campo>
-          <Campo rotulo="Senha">
-            <input
-              type="password"
-              className={estiloInput}
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder={modo === 'cadastrar' ? 'Mínimo de 6 caracteres' : '••••••••'}
-              autoComplete={modo === 'cadastrar' ? 'new-password' : 'current-password'}
-              minLength={modo === 'cadastrar' ? 6 : undefined}
-              required
-            />
-          </Campo>
+          {modo !== 'recuperar' && (
+            <Campo rotulo="Senha">
+              <input
+                type="password"
+                className={estiloInput}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder={modo === 'cadastrar' ? 'Mínimo de 6 caracteres' : '••••••••'}
+                autoComplete={modo === 'cadastrar' ? 'new-password' : 'current-password'}
+                minLength={modo === 'cadastrar' ? 6 : undefined}
+                required
+              />
+            </Campo>
+          )}
           {modo === 'cadastrar' && (
             <Campo rotulo="Código da igreja">
               <input
@@ -123,15 +134,46 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Botao type="submit" className="w-full" disabled={enviando}>
-            {enviando ? 'Aguarde…' : modo === 'entrar' ? 'Entrar' : 'Criar conta'}
+          {emailEnviado && (
+            <div className="anim-fade-in rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              📬 Link enviado! Confira seu e-mail (e a caixa de spam) e toque no link para criar a senha nova.
+            </div>
+          )}
+
+          <Botao type="submit" className="w-full" disabled={enviando || (modo === 'recuperar' && emailEnviado)}>
+            {enviando
+              ? 'Aguarde…'
+              : modo === 'entrar'
+                ? 'Entrar'
+                : modo === 'recuperar'
+                  ? 'Enviar link de redefinição'
+                  : 'Criar conta'}
           </Botao>
         </form>
 
+        {modo === 'entrar' && (
+          <button
+            type="button"
+            onClick={() => trocarModo('recuperar')}
+            className="mt-3 w-full text-center text-sm font-semibold text-indigo-600"
+          >
+            Esqueci minha senha
+          </button>
+        )}
+        {modo === 'recuperar' && (
+          <button
+            type="button"
+            onClick={() => trocarModo('entrar')}
+            className="mt-3 w-full text-center text-sm font-semibold text-slate-500"
+          >
+            ← Voltar para o login
+          </button>
+        )}
+
         <p className="mt-4 text-center text-xs text-slate-400">
-          {modo === 'entrar'
-            ? 'Primeira vez? Toque em "Criar conta" e use o código da sua igreja.'
-            : 'Após criar a conta, um líder da igreja aprova o seu acesso.'}
+          {modo === 'entrar' && 'Primeira vez? Toque em "Criar conta" e use o código da sua igreja.'}
+          {modo === 'cadastrar' && 'Após criar a conta, um líder da igreja aprova o seu acesso.'}
+          {modo === 'recuperar' && 'O link do e-mail abre o app direto na tela de senha nova.'}
         </p>
       </div>
     </div>
